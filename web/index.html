@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Now — Daily Chronometer</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="page">
+  <main class="panel" aria-labelledby="panelTitle">
+    <div class="panel-header">
+      <p class="eyebrow">Local chronometer</p>
+      <h1 class="app-title" id="panelTitle">Now</h1>
+    </div>
+
+    <p class="date-line" id="dateLine">Loading date…</p>
+
+    <p class="time-line" aria-hidden="true">
+      <span id="hours">--</span><span class="colon">:</span><span id="minutes">--</span><span class="colon">:</span><span id="seconds">--</span>
+    </p>
+
+    <section class="progress" aria-label="Percentage of today elapsed">
+      <div class="progress-track">
+        <div class="rail">
+          <div class="progress-fill" id="progressFill" style="width:0%"></div>
+        </div>
+        <div class="progress-marker" id="progressMarker" style="left:0%"></div>
+        <div class="ticks">
+          <span class="tick tick-0">00:00</span>
+          <span class="tick tick-6">06:00</span>
+          <span class="tick tick-12">12:00</span>
+          <span class="tick tick-18">18:00</span>
+          <span class="tick tick-24">24:00</span>
+        </div>
+      </div>
+      <p class="progress-readout">
+        <span id="percentValue">0.0</span><span class="percent-sign">%</span> of today elapsed
+      </p>
+    </section>
+
+    <p class="sr-only" id="liveRegion" aria-live="polite"></p>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
