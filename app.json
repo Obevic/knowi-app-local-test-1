@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"branding":{"name":"Now","colors":{"background":"#0b1e2d","surface":"#102538","text":"#f4f1e8","muted":"#a9bdcb","border":"#274a63","button":"#c9a227","buttonText":"#12202c"}}}
+{"v":2,"service":"server/app.mjs","bindings":[],"branding":{"name":"Meridian","colors":{"background":"#12161f","surface":"#1a2029","text":"#edeff4","muted":"#aeb6c7","border":"#2b3242","button":"#d6a75a","buttonText":"#1a1206"}}}

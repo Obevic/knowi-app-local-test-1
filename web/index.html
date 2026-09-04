@@ -2,46 +2,61 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Now — Daily Chronometer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meridian — World clock &amp; meeting timeline</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="page">
-  <main class="panel" aria-labelledby="panelTitle">
-    <div class="panel-header">
-      <p class="eyebrow">Local chronometer</p>
-      <h1 class="app-title" id="panelTitle">Now</h1>
-    </div>
-
-    <p class="date-line" id="dateLine">Loading date…</p>
-
-    <p class="time-line" aria-hidden="true">
-      <span id="hours">--</span><span class="colon">:</span><span id="minutes">--</span><span class="colon">:</span><span id="seconds">--</span>
-    </p>
-
-    <section class="progress" aria-label="Percentage of today elapsed">
-      <div class="progress-track">
-        <div class="rail">
-          <div class="progress-fill" id="progressFill" style="width:0%"></div>
-        </div>
-        <div class="progress-marker" id="progressMarker" style="left:0%"></div>
-        <div class="ticks">
-          <span class="tick tick-0">00:00</span>
-          <span class="tick tick-6">06:00</span>
-          <span class="tick tick-12">12:00</span>
-          <span class="tick tick-18">18:00</span>
-          <span class="tick tick-24">24:00</span>
-        </div>
+<div class="app">
+  <header class="header">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">&#9680;</span>
+      <div>
+        <p class="eyebrow">World clock &amp; meeting timeline</p>
+        <h1 class="brand__name">Meridian</h1>
       </div>
-      <p class="progress-readout">
-        <span id="percentValue">0.0</span><span class="percent-sign">%</span> of today elapsed
-      </p>
+    </div>
+    <form class="add-city" id="add-city-form">
+      <label for="city-select" class="add-city__label">Add a city</label>
+      <div class="add-city__controls">
+        <select id="city-select" name="city"></select>
+        <button type="submit" class="btn">Add</button>
+      </div>
+    </form>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero__clock"></div>
+      <div class="hero__info">
+        <p class="hero__label">Your local time</p>
+        <h2 id="hero-heading" class="hero__time"><span id="hero-time">--:--:--</span></h2>
+        <p class="hero__date" id="hero-date">&mdash;</p>
+        <p class="hero__zone" id="hero-zone">&mdash;</p>
+      </div>
     </section>
 
-    <p class="sr-only" id="liveRegion" aria-live="polite"></p>
+    <section class="clocks" aria-labelledby="clocks-heading">
+      <h2 id="clocks-heading" class="section-title">World clocks</h2>
+      <ul class="clock-grid" id="clock-grid"></ul>
+      <p class="empty-state" id="clocks-empty" hidden>No cities added yet. Use &ldquo;Add a city&rdquo; above to build your board.</p>
+    </section>
+
+    <section class="timeline" aria-labelledby="timeline-heading">
+      <h2 id="timeline-heading" class="section-title">Meeting timeline</h2>
+      <p class="section-hint">Each row spans one full day. The amber band marks approximate business hours (9:00&ndash;17:00 local), and the bright line marks the current local hour in each city.</p>
+      <div class="timeline-scale" aria-hidden="true">
+        <span>12am</span><span>3am</span><span>6am</span><span>9am</span><span>12pm</span><span>3pm</span><span>6pm</span><span>9pm</span><span>12am</span>
+      </div>
+      <ul class="timeline-rows" id="timeline-rows"></ul>
+      <p class="empty-state" id="timeline-empty" hidden>No cities added yet.</p>
+    </section>
   </main>
+
+  <footer class="footer">
+    <p>Times update every second using your device&rsquo;s clock. The business-hours band is a general 9&ndash;5 guideline, not a calendar lookup, and nothing here is saved between visits.</p>
+  </footer>
 </div>
-<script src="app.js"></script>
+<script src="app.js" defer></script>
 </body>
 </html>
