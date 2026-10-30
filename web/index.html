@@ -79,17 +79,105 @@
         </div>
       </header>
 
+      <div id="low-stock-banner" class="low-stock-banner" hidden role="alert">
+        <span class="low-stock-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l9 16H3L12 3z"></path>
+            <path d="M12 10v4M12 17v.5"></path>
+          </svg>
+        </span>
+        <div class="low-stock-text">
+          <strong id="low-stock-count">0</strong>
+          <span id="low-stock-message">items are at or below their low-stock threshold.</span>
+        </div>
+        <button id="low-stock-dismiss" class="btn btn-ghost btn-sm" type="button" aria-label="Dismiss low-stock alert">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </div>
+
       <section class="card ledger-card" aria-labelledby="page-title">
+        <div class="ledger-toolbar">
+          <div class="search-wrap">
+            <label for="search-input" class="visually-hidden">Search items</label>
+            <span class="search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="M20 20l-3.5-3.5"></path>
+              </svg>
+            </span>
+            <input type="search" id="search-input" class="input" placeholder="Search items… ( / )" autocomplete="off">
+          </div>
+          <div class="filter-wrap">
+            <label for="category-filter" class="visually-hidden">Filter by category</label>
+            <select id="category-filter" class="input">
+              <option value="">All categories</option>
+            </select>
+          </div>
+          <div class="filter-wrap">
+            <label for="status-filter" class="visually-hidden">Filter by status</label>
+            <select id="status-filter" class="input">
+              <option value="">All statuses</option>
+            </select>
+          </div>
+          <button id="new-item-btn" class="btn btn-primary" type="button">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 5v14M5 12h14"></path>
+              </svg>
+            </span>
+            <span class="btn-label">New item</span>
+          </button>
+          <button id="import-btn" class="btn btn-ghost" type="button">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 15V3M8 7l4-4 4 4M5 21h14"></path>
+              </svg>
+            </span>
+            <span class="btn-label">Import CSV</span>
+          </button>
+          <button id="print-btn" class="btn btn-ghost" type="button">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M6 14h12v7H6z"></path>
+              </svg>
+            </span>
+            <span class="btn-label">Print</span>
+          </button>
+          <button id="undo-btn" class="btn btn-ghost" type="button" disabled aria-label="Undo last action">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 14L4 9l5-5"></path>
+                <path d="M4 9h11a5 5 0 0 1 0 10h-3"></path>
+              </svg>
+            </span>
+            <span class="btn-label">Undo</span>
+          </button>
+          <button id="redo-btn" class="btn btn-ghost" type="button" disabled aria-label="Redo last action">
+            <span class="btn-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 14l5-5-5-5"></path>
+                <path d="M20 9H9a5 5 0 0 0 0 10h3"></path>
+              </svg>
+            </span>
+            <span class="btn-label">Redo</span>
+          </button>
+        </div>
+
         <div class="ledger-scroll">
           <table id="items-table" class="ledger">
-            <caption class="visually-hidden">Item ledger with name, category, owner, status and last update</caption>
+            <caption class="visually-hidden">Item ledger with name, category, owner, status, quantity, threshold and last update</caption>
             <thead>
               <tr>
                 <th scope="col">Item</th>
                 <th scope="col">Category</th>
                 <th scope="col">Owner</th>
                 <th scope="col">Status</th>
+                <th scope="col">Qty</th>
+                <th scope="col">Threshold</th>
                 <th scope="col">Updated</th>
+                <th scope="col" class="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody id="items-body"></tbody>
@@ -116,8 +204,113 @@
 
         <div id="items-status" class="items-status" role="status" aria-live="polite"></div>
       </section>
+
+      <section class="card reports-card" aria-labelledby="reports-heading">
+        <h2 id="reports-heading" class="section-heading">Per-category reports</h2>
+        <div id="reports-grid" class="reports-grid" role="list"></div>
+      </section>
+
+      <section class="card history-card" aria-labelledby="history-heading">
+        <div class="history-header">
+          <h2 id="history-heading" class="section-heading">Activity history</h2>
+          <button id="clear-history-btn" class="btn btn-ghost btn-sm" type="button">Clear log</button>
+        </div>
+        <ol id="history-list" class="history-list" role="list"></ol>
+        <div id="history-empty" class="history-empty" hidden>No activity recorded yet.</div>
+      </section>
     </main>
   </div>
+
+  <div id="item-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="item-modal-title">
+    <div class="modal">
+      <header class="modal-header">
+        <h2 id="item-modal-title" class="modal-title">New item</h2>
+        <button id="item-modal-close" class="btn btn-ghost btn-sm" type="button" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </header>
+      <form id="item-form" novalidate>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="field-name">Item name <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="field-name" class="input" autocomplete="off" maxlength="120">
+            <p class="field-error" id="err-name" role="alert" hidden></p>
+          </div>
+          <div class="form-field">
+            <label for="field-category">Category <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="field-category" class="input" autocomplete="off" maxlength="60" list="category-suggestions">
+            <datalist id="category-suggestions"></datalist>
+            <p class="field-error" id="err-category" role="alert" hidden></p>
+          </div>
+          <div class="form-field">
+            <label for="field-owner">Owner</label>
+            <input type="text" id="field-owner" class="input" autocomplete="off" maxlength="80">
+            <p class="field-error" id="err-owner" role="alert" hidden></p>
+          </div>
+          <div class="form-field">
+            <label for="field-status">Status</label>
+            <select id="field-status" class="input">
+              <option value="In stock">In stock</option>
+              <option value="Low stock">Low stock</option>
+              <option value="Out of stock">Out of stock</option>
+              <option value="Reserved">Reserved</option>
+              <option value="Discontinued">Discontinued</option>
+            </select>
+            <p class="field-error" id="err-status" role="alert" hidden></p>
+          </div>
+          <div class="form-field">
+            <label for="field-quantity">Quantity</label>
+            <input type="number" id="field-quantity" class="input" min="0" step="1" inputmode="numeric">
+            <p class="field-error" id="err-quantity" role="alert" hidden></p>
+          </div>
+          <div class="form-field">
+            <label for="field-threshold">Low-stock threshold</label>
+            <input type="number" id="field-threshold" class="input" min="0" step="1" inputmode="numeric">
+            <p class="field-error" id="err-threshold" role="alert" hidden></p>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" id="item-form-cancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="item-form-save" class="btn btn-primary">Save item</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <div id="import-modal" class="modal-backdrop" hidden role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
+    <div class="modal modal-wide">
+      <header class="modal-header">
+        <h2 id="import-modal-title" class="modal-title">Bulk import from CSV</h2>
+        <button id="import-modal-close" class="btn btn-ghost btn-sm" type="button" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </header>
+      <div class="import-body">
+        <p class="import-hint">Paste CSV with a header row. Expected columns: <code>name, category, owner, status, quantity, threshold</code>. Rows missing required fields will be skipped and reported.</p>
+        <label for="import-textarea" class="visually-hidden">CSV data</label>
+        <textarea id="import-textarea" class="import-textarea" rows="10" spellcheck="false" placeholder="name,category,owner,status,quantity,threshold&#10;Widget,Tools,Ana,In stock,42,10"></textarea>
+        <div id="import-preview" class="import-preview" hidden>
+          <h3 class="import-preview-title">Preview</h3>
+          <div class="import-preview-stats" id="import-stats"></div>
+          <div class="import-preview-errors" id="import-errors" hidden></div>
+          <table class="import-preview-table" id="import-table" hidden>
+            <thead><tr><th>Row</th><th>Name</th><th>Category</th><th>Owner</th><th>Status</th><th>Qty</th><th>Threshold</th><th>Result</th></tr></thead>
+            <tbody id="import-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button type="button" id="import-cancel" class="btn btn-ghost">Cancel</button>
+        <button type="button" id="import-run" class="btn btn-primary" disabled>Import rows</button>
+      </footer>
+    </div>
+  </div>
+
+  <div id="toast-region" class="toast-region" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="app.js"></script>
 </body>
