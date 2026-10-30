@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Inventory Tracker"}]}
+{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Item Ledger"}]}
