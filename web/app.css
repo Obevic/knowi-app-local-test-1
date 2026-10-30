@@ -1105,3 +1105,15 @@ select.input {
 
 /* Knowi platform accessibility invariant */
 [hidden] { display: none !important; }
+
+/* ---------- Last updated timestamp ---------- */
+.last-updated {
+  color: var(--muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Knowi platform accessibility invariant */
+[hidden] { display: none !important; }

@@ -74,6 +74,7 @@ const els = {
   viewer: document.getElementById('viewer'),
   main: document.getElementById('main'),
   pageTitle: document.getElementById('page-title'),
+  lastUpdated: document.getElementById('last-updated'),
   themeToggle: document.getElementById('theme-toggle'),
   exportBtn: document.getElementById('export-btn'),
   itemsTable: document.getElementById('items-table'),
@@ -185,6 +186,19 @@ function toggleTheme() {
 }
 
 // ---------------------------------------------------------------------------
+// Last updated timestamp
+// ---------------------------------------------------------------------------
+
+// updateLastUpdated
+// Sets the "Last updated" timestamp in the header to the current local time.
+// Called after every successful save path and once on initial load.
+function updateLastUpdated() {
+  if (els.lastUpdated) {
+    els.lastUpdated.textContent = 'Last updated: ' + new Date().toLocaleString();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Data
 // ---------------------------------------------------------------------------
 
@@ -215,6 +229,7 @@ async function loadItems() {
     updateLowStockBanner();
     showLoading(false);
     setItemsStatus(allItems.length + ' items loaded.');
+    updateLastUpdated();
     window.knowiReportReady = true;
   } catch (err) {
     showLoading(false);
@@ -647,6 +662,7 @@ function undo() {
   updateLowStockBanner();
   logActivity('undo', 'Undid: ' + entry.action);
   setItemsStatus('Undid ' + entry.action + '.');
+  updateLastUpdated();
 }
 
 // redo
@@ -666,6 +682,7 @@ function redo() {
   updateLowStockBanner();
   logActivity('redo', 'Redid: ' + entry.action);
   setItemsStatus('Redid ' + entry.action + '.');
+  updateLastUpdated();
 }
 
 // applyUndo
@@ -749,6 +766,7 @@ function addItem(fields) {
   updateCategorySuggestions();
   renderReports();
   updateLowStockBanner();
+  updateLastUpdated();
 }
 
 // editItem
@@ -777,6 +795,7 @@ function editItem(id, fields) {
   updateCategorySuggestions();
   renderReports();
   updateLowStockBanner();
+  updateLastUpdated();
 }
 
 // deleteItem
@@ -795,6 +814,7 @@ function deleteItem(id) {
   updateCategorySuggestions();
   renderReports();
   updateLowStockBanner();
+  updateLastUpdated();
 }
 
 // ---------------------------------------------------------------------------
@@ -1235,6 +1255,7 @@ function runImport() {
   updateCategorySuggestions();
   renderReports();
   updateLowStockBanner();
+  updateLastUpdated();
 }
 
 // ---------------------------------------------------------------------------
@@ -1298,7 +1319,7 @@ function exportCsv() {
 // ---------------------------------------------------------------------------
 
 // printSummary
-// Triggers the browser's print dialog. The @media print CSS hides navigation
+// Triggers the browser's print dialog. The ＠media print CSS hides navigation
 // and other chrome, showing only the ledger and reports.
 function printSummary() {
   window.print();
