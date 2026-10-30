@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"branding":{"name":"Chronometer","colors":{"background":"#12161b","surface":"#1b2129","text":"#edeef0","muted":"#9aa4af","border":"#2b333d","button":"#c79a44","buttonText":"#14181c"}}}
+{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Inventory Tracker"}]}
