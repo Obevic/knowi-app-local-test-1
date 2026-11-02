@@ -152,24 +152,28 @@
           <button type="button" class="btn btn-clear" id="btn-empty-clear">Clear filters</button>
         </div>
 
-        <div class="ledger-table-wrap" id="ledger-table-wrap">
-          <table class="ledger-table">
-            <thead>
-              <tr>
-                <th scope="col">Opportunity</th>
-                <th scope="col">Company</th>
-                <th scope="col">Product</th>
-                <th scope="col">Stage</th>
-                <th scope="col">Region</th>
-                <th scope="col">Account exec</th>
-                <th scope="col">SDR</th>
-                <th scope="col" class="num">Amount</th>
-                <th scope="col" class="num">Probability</th>
-                <th scope="col">Created</th>
-              </tr>
-            </thead>
-            <tbody id="ledger-body"></tbody>
-          </table>
+        <div id="ledger-body">
+          <div class="ledger-table-wrap" id="ledger-table-wrap">
+            <table class="ledger-table">
+              <thead>
+                <tr>
+                  <th scope="col">Opportunity</th>
+                  <th scope="col">Company</th>
+                  <th scope="col">Product</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Region</th>
+                  <th scope="col">Account exec</th>
+                  <th scope="col">SDR</th>
+                  <th scope="col" class="num">Amount</th>
+                  <th scope="col" class="num">Probability</th>
+                  <th scope="col">Created</th>
+                </tr>
+              </thead>
+              <tbody id="ledger-table-body"></tbody>
+            </table>
+          </div>
+
+          <div class="ledger-cards" id="ledger-cards"></div>
         </div>
 
         <div class="ledger-pager" id="ledger-pager" hidden>

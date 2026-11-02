@@ -29,6 +29,7 @@ window.knowiReportReady = false;
     els.ledgerEmpty = $('ledger-empty');
     els.ledgerTableWrap = $('ledger-table-wrap');
     els.ledgerBody = $('ledger-body');
+    els.ledgerCards = $('ledger-cards');
     els.ledgerPager = $('ledger-pager');
     els.ledgerCount = $('ledger-count');
     els.pagerIndicator = $('pager-indicator');
@@ -202,6 +203,8 @@ window.knowiReportReady = false;
   function renderTable() {
     var start = (state.page - 1) * PAGE_SIZE;
     var end = Math.min(start + PAGE_SIZE, state.filtered.length);
+    var tbody = document.getElementById('ledger-table-body');
+    if (!tbody) return;
     var frag = document.createDocumentFragment();
     for (var i = start; i < end; i++) {
       var row = state.filtered[i];
@@ -257,8 +260,128 @@ window.knowiReportReady = false;
 
       frag.appendChild(tr);
     }
-    els.ledgerBody.innerHTML = '';
-    els.ledgerBody.appendChild(frag);
+    tbody.innerHTML = '';
+    tbody.appendChild(frag);
+  }
+
+  function renderCards() {
+    if (!els.ledgerCards) return;
+    var start = (state.page - 1) * PAGE_SIZE;
+    var end = Math.min(start + PAGE_SIZE, state.filtered.length);
+    var frag = document.createDocumentFragment();
+    for (var i = start; i < end; i++) {
+      var row = state.filtered[i];
+      var card = document.createElement('div');
+      card.className = 'ledger-card';
+
+      var h3 = document.createElement('h3');
+      h3.className = 'card-company';
+      h3.textContent = val(row, 'Company') || '–';
+      card.appendChild(h3);
+
+      var idLine = document.createElement('div');
+      idLine.className = 'card-id';
+      idLine.textContent = val(row, 'Opportunity_ID') || '–';
+      card.appendChild(idLine);
+
+      var pills = document.createElement('div');
+      pills.className = 'card-pills';
+      var stage = val(row, 'Stage');
+      var stagePill = document.createElement('span');
+      stagePill.className = 'pill ' + stageClass(stage);
+      stagePill.textContent = stage || '–';
+      pills.appendChild(stagePill);
+      var region = val(row, 'Region');
+      if (region) {
+        var regionPill = document.createElement('span');
+        regionPill.className = 'pill pill-neutral';
+        regionPill.textContent = region;
+        pills.appendChild(regionPill);
+      }
+      card.appendChild(pills);
+
+      var metrics = document.createElement('div');
+      metrics.className = 'card-metrics';
+      var amt = document.createElement('div');
+      amt.className = 'card-metric';
+      var amtLabel = document.createElement('span');
+      amtLabel.className = 'card-metric-label';
+      amtLabel.textContent = 'Amount';
+      var amtVal = document.createElement('span');
+      amtVal.className = 'card-metric-value';
+      amtVal.textContent = fmtMoney(val(row, 'Amount'));
+      amt.appendChild(amtLabel);
+      amt.appendChild(amtVal);
+      metrics.appendChild(amt);
+
+      var prob = document.createElement('div');
+      prob.className = 'card-metric';
+      var probLabel = document.createElement('span');
+      probLabel.className = 'card-metric-label';
+      probLabel.textContent = 'Probability';
+      var probVal = document.createElement('span');
+      probVal.className = 'card-metric-value';
+      probVal.textContent = fmtPct(val(row, 'Probability'));
+      prob.appendChild(probLabel);
+      prob.appendChild(probVal);
+      metrics.appendChild(prob);
+      card.appendChild(metrics);
+
+      var meta = document.createElement('div');
+      meta.className = 'card-meta';
+      var prod = document.createElement('div');
+      prod.className = 'card-meta-item';
+      var prodLabel = document.createElement('span');
+      prodLabel.className = 'card-meta-label';
+      prodLabel.textContent = 'Product';
+      var prodVal = document.createElement('span');
+      prodVal.className = 'card-meta-value';
+      prodVal.textContent = val(row, 'Product') || '–';
+      prod.appendChild(prodLabel);
+      prod.appendChild(prodVal);
+      meta.appendChild(prod);
+
+      var ae = document.createElement('div');
+      ae.className = 'card-meta-item';
+      var aeLabel = document.createElement('span');
+      aeLabel.className = 'card-meta-label';
+      aeLabel.textContent = 'Account exec';
+      var aeVal = document.createElement('span');
+      aeVal.className = 'card-meta-value';
+      aeVal.textContent = val(row, 'AE_Name') || '–';
+      ae.appendChild(aeLabel);
+      ae.appendChild(aeVal);
+      meta.appendChild(ae);
+
+      var sdr = document.createElement('div');
+      sdr.className = 'card-meta-item';
+      var sdrLabel = document.createElement('span');
+      sdrLabel.className = 'card-meta-label';
+      sdrLabel.textContent = 'SDR';
+      var sdrVal = document.createElement('span');
+      sdrVal.className = 'card-meta-value';
+      sdrVal.textContent = val(row, 'SDR_Name') || '–';
+      sdr.appendChild(sdrLabel);
+      sdr.appendChild(sdrVal);
+      meta.appendChild(sdr);
+
+      var date = document.createElement('div');
+      date.className = 'card-meta-item';
+      var dateLabel = document.createElement('span');
+      dateLabel.className = 'card-meta-label';
+      dateLabel.textContent = 'Created';
+      var dateVal = document.createElement('span');
+      dateVal.className = 'card-meta-value';
+      dateVal.textContent = fmtDate(val(row, 'Created_Date'));
+      date.appendChild(dateLabel);
+      date.appendChild(dateVal);
+      meta.appendChild(date);
+
+      card.appendChild(meta);
+      frag.appendChild(card);
+    }
+    els.ledgerCards.innerHTML = '';
+    els.ledgerCards.appendChild(frag);
   }
 
   function updatePager() {
@@ -280,6 +403,7 @@ window.knowiReportReady = false;
     els.ledgerError.hidden = !state.error;
     els.ledgerEmpty.hidden = !(hasData && !hasFiltered);
     els.ledgerTableWrap.hidden = state.loading || state.error || !hasFiltered;
+    els.ledgerCards.hidden = state.loading || state.error || !hasFiltered;
     els.ledgerPager.hidden = state.loading || state.error || !hasFiltered || state.filtered.length <= PAGE_SIZE;
 
     if (state.error) {
@@ -296,6 +420,7 @@ window.knowiReportReady = false;
     updateSummary();
     updatePills();
     renderTable();
+    renderCards();
     updatePager();
     showState();
   }
