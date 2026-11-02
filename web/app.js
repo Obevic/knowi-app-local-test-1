@@ -1,185 +1,263 @@
 window.knowiReportReady = false;
 
-(function () {
-  'use strict';
+const STATUS = {
+  risk: { label: 'At risk', fg: '#9C2F3C', bg: '#F5E3E5' },
+  due: { label: 'Due soon', fg: '#7F5410', bg: '#F6ECD9' },
+  ok: { label: 'On track', fg: '#276B5D', bg: '#E4F0EC' },
+};
 
-  var items = [
-    { id: 1, name: 'A4 Copy Paper', supplier: 'Bright Paper Co.', qty: 120, reorder: 40, unitCost: 4.25 },
-    { id: 2, name: 'Ballpoint Pens (Blue)', supplier: 'Inkwell Supply', qty: 8, reorder: 25, unitCost: 0.85 },
-    { id: 3, name: 'Sticky Notes 3x3', supplier: 'Inkwell Supply', qty: 64, reorder: 30, unitCost: 2.10 },
-    { id: 4, name: 'Toner Cartridge 26X', supplier: 'Bright Paper Co.', qty: 3, reorder: 6, unitCost: 89.00 },
-    { id: 5, name: 'USB-C Cable 2m', supplier: 'Circuit Works', qty: 45, reorder: 20, unitCost: 11.50 },
-    { id: 6, name: 'Wireless Mouse', supplier: 'Circuit Works', qty: 12, reorder: 10, unitCost: 24.99 },
-    { id: 7, name: 'Ergonomic Chair', supplier: 'Forma Office', qty: 5, reorder: 4, unitCost: 320.00 },
-    { id: 8, name: 'Standing Desk Mat', supplier: 'Forma Office', qty: 18, reorder: 8, unitCost: 34.00 },
-    { id: 9, name: 'Whiteboard Markers', supplier: 'Inkwell Supply', qty: 2, reorder: 12, unitCost: 1.40 },
-    { id: 10, name: 'HDMI Adapter', supplier: 'Circuit Works', qty: 30, reorder: 15, unitCost: 18.75 },
-    { id: 11, name: 'Desk Lamp LED', supplier: 'Forma Office', qty: 9, reorder: 6, unitCost: 42.00 },
-    { id: 12, name: 'Cable Ties (100pk)', supplier: 'Circuit Works', qty: 55, reorder: 20, unitCost: 6.30 },
-    { id: 13, name: 'Letter Envelopes', supplier: 'Bright Paper Co.', qty: 200, reorder: 100, unitCost: 0.12 },
-    { id: 14, name: 'Monitor Stand', supplier: 'Forma Office', qty: 7, reorder: 5, unitCost: 55.00 }
+function seedInventory() {
+  const names = [
+    'Cable Kit', 'USB-C Cable', 'Adapter Hub', 'Sensor Pack', 'Docking Station',
+    'Power Cable', 'Display Arm', 'Router Unit', 'Wireless Mouse', 'Mechanical Keyboard',
+    'Webcam Mount', 'Surge Protector', 'HDMI Switch', 'Laptop Stand',
   ];
+  const quantities = [11, 10, 22, 3, 14, 2, 8, 11, 17, 6, 4, 19, 1, 9];
+  const reorderPoints = [10, 10, 8, 6, 4, 5, 8, 3, 6, 6, 5, 4, 3, 5];
+  const unitCosts = [40, 12, 55, 95, 170, 18, 110, 220, 28, 75, 22, 33, 60, 48];
+  const suppliers = [
+    'North Supply', 'North Supply', 'West Supply', 'East Supply', 'West Supply',
+    'East Supply', 'North Supply', 'West Supply', 'South Supply', 'South Supply',
+    'East Supply', 'North Supply', 'West Supply', 'South Supply',
+  ];
+  return names.map((name, i) => ({
+    id: `item-${i}`,
+    item: name,
+    supplier: suppliers[i],
+    quantity: quantities[i],
+    reorderPoint: reorderPoints[i],
+    unitCost: unitCosts[i],
+  }));
+}
 
-  var searchInput = document.getElementById('searchInput');
-  var filterSelect = document.getElementById('filterSelect');
-  var totalValue = document.getElementById('totalValue');
-  var tableBody = document.getElementById('tableBody');
-  var tableEmpty = document.getElementById('tableEmpty');
-  var navCount = document.getElementById('navCount');
-  var supplierCount = document.getElementById('supplierCount');
+function statusFor(row) {
+  if (row.quantity < row.reorderPoint) return STATUS.risk;
+  if (row.quantity === row.reorderPoint) return STATUS.due;
+  return STATUS.ok;
+}
 
-  function fmt(n) {
-    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function formatCurrency(n) {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
+const state = {
+  rows: seedInventory(),
+  search: '',
+  supplier: 'All',
+  page: 0,
+};
+
+const PAGE_SIZE = 50;
+
+function getFiltered() {
+  const q = state.search.trim().toLowerCase();
+  return state.rows.filter((r) => {
+    const matchesSearch = !q || r.item.toLowerCase().includes(q);
+    const matchesSupplier = state.supplier === 'All' || r.supplier === state.supplier;
+    return matchesSearch && matchesSupplier;
+  });
+}
+
+function computeTotal() {
+  return state.rows.reduce((sum, r) => sum + r.quantity * r.unitCost, 0);
+}
+
+function barSvg(row, color) {
+  const ratio = Math.max(0, Math.min(1, row.quantity / (row.reorderPoint * 2 || 1)));
+  const width = 56;
+  const height = 6;
+  const filled = Math.round(width * ratio);
+  return `<svg class="stock-bar" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Stock level relative to reorder point">
+    <rect x="0" y="0" width="${width}" height="${height}" rx="3" fill="#EAEFEF"></rect>
+    <rect x="0" y="0" width="${filled}" height="${height}" rx="3" fill="${color}"></rect>
+  </svg>`;
+}
+
+function renderSupplierOptions() {
+  const select = document.getElementById('supplier-filter');
+  const current = state.supplier;
+  const uniqueSuppliers = Array.from(new Set(state.rows.map((r) => r.supplier))).sort();
+  select.innerHTML = '';
+  const allOpt = document.createElement('option');
+  allOpt.value = 'All';
+  allOpt.textContent = 'All suppliers';
+  select.appendChild(allOpt);
+  uniqueSuppliers.forEach((s) => {
+    const opt = document.createElement('option');
+    opt.value = s;
+    opt.textContent = s;
+    select.appendChild(opt);
+  });
+  select.value = current;
+}
+
+function renderTotal() {
+  document.getElementById('total-value').textContent = formatCurrency(computeTotal());
+}
+
+function renderNavCount() {
+  document.getElementById('nav-count').textContent = String(state.rows.length);
+}
+
+function renderTable() {
+  const tbody = document.getElementById('inventory-body');
+  const emptyState = document.getElementById('empty-state');
+  const filtered = getFiltered();
+  const pageRows = filtered.slice(0, (state.page + 1) * PAGE_SIZE);
+
+  tbody.innerHTML = '';
+
+  if (filtered.length === 0) {
+    emptyState.hidden = false;
+    document.getElementById('table-wrap').hidden = true;
+    document.getElementById('show-more').hidden = true;
+    return;
   }
 
-  function buildFilter() {
-    var suppliers = [];
-    var seen = {};
-    items.forEach(function (it) {
-      if (!seen[it.supplier]) {
-        seen[it.supplier] = true;
-        suppliers.push(it.supplier);
-      }
+  emptyState.hidden = true;
+  document.getElementById('table-wrap').hidden = false;
+
+  pageRows.forEach((row) => {
+    const status = statusFor(row);
+    const tr = document.createElement('tr');
+    tr.className = 'inventory-row';
+
+    const itemCell = document.createElement('td');
+    itemCell.className = 'cell-item';
+    itemCell.innerHTML = `
+      <div class="item-name">${escapeHtml(row.item)}</div>
+      <div class="item-status-row">
+        <span class="status-pill" style="color:${status.fg};background:${status.bg}">${status.label}</span>
+        ${barSvg(row, status.fg)}
+      </div>
+    `;
+    tr.appendChild(itemCell);
+
+    const supplierCell = document.createElement('td');
+    supplierCell.textContent = row.supplier;
+    tr.appendChild(supplierCell);
+
+    const qtyCell = document.createElement('td');
+    const qtyInput = document.createElement('input');
+    qtyInput.type = 'number';
+    qtyInput.min = '0';
+    qtyInput.className = 'qty-input';
+    qtyInput.value = String(row.quantity);
+    qtyInput.setAttribute('aria-label', `Quantity for ${row.item}`);
+    qtyInput.addEventListener('change', (e) => {
+      const val = Math.max(0, Math.floor(Number(e.target.value) || 0));
+      row.quantity = val;
+      e.target.value = String(val);
+      renderTotal();
+      renderTable();
     });
-    suppliers.sort();
-    filterSelect.innerHTML = '';
-    var all = document.createElement('option');
-    all.value = '';
-    all.textContent = 'All suppliers';
-    filterSelect.appendChild(all);
-    suppliers.forEach(function (s) {
-      var o = document.createElement('option');
-      o.value = s;
-      o.textContent = s;
-      filterSelect.appendChild(o);
+    qtyCell.appendChild(qtyInput);
+    tr.appendChild(qtyCell);
+
+    const reorderCell = document.createElement('td');
+    reorderCell.className = 'num-cell';
+    reorderCell.textContent = String(row.reorderPoint);
+    tr.appendChild(reorderCell);
+
+    const costCell = document.createElement('td');
+    costCell.className = 'num-cell';
+    costCell.textContent = formatCurrency(row.unitCost);
+    tr.appendChild(costCell);
+
+    const restockCell = document.createElement('td');
+    const restockBtn = document.createElement('button');
+    restockBtn.type = 'button';
+    restockBtn.className = 'btn-restock';
+    restockBtn.textContent = 'Restock';
+    restockBtn.addEventListener('click', () => {
+      row.quantity = row.reorderPoint * 2;
+      renderTotal();
+      renderTable();
+      announce(`${row.item} restocked to ${row.quantity} units`);
     });
-    supplierCount.textContent = String(suppliers.length);
+    restockCell.appendChild(restockBtn);
+    tr.appendChild(restockCell);
+
+    tbody.appendChild(tr);
+  });
+
+  const showMore = document.getElementById('show-more');
+  if (filtered.length > pageRows.length) {
+    showMore.hidden = false;
+  } else {
+    showMore.hidden = true;
   }
+}
 
-  function render() {
-    var q = (searchInput.value || '').trim().toLowerCase();
-    var sup = filterSelect.value;
+function announce(message) {
+  const live = document.getElementById('live-region');
+  live.textContent = message;
+}
 
-    var filtered = items.filter(function (it) {
-      var okName = !q || it.name.toLowerCase().indexOf(q) !== -1;
-      var okSup = !sup || it.supplier === sup;
-      return okName && okSup;
-    });
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
 
-    var total = 0;
-    filtered.forEach(function (it) {
-      total += it.qty * it.unitCost;
-    });
-    totalValue.textContent = fmt(total);
+function renderAll() {
+  renderSupplierOptions();
+  renderNavCount();
+  renderTotal();
+  renderTable();
+}
 
-    tableBody.innerHTML = '';
-    if (filtered.length === 0) {
-      tableEmpty.hidden = false;
+function initControls() {
+  const searchInput = document.getElementById('search-input');
+  searchInput.addEventListener('input', (e) => {
+    state.search = e.target.value;
+    state.page = 0;
+    renderTable();
+  });
+
+  const supplierSelect = document.getElementById('supplier-filter');
+  supplierSelect.addEventListener('change', (e) => {
+    state.supplier = e.target.value;
+    state.page = 0;
+    renderTable();
+  });
+
+  document.getElementById('show-more-btn').addEventListener('click', () => {
+    state.page += 1;
+    renderTable();
+  });
+}
+
+async function loadSession() {
+  const viewerEl = document.getElementById('viewer-name');
+  const viewerSub = document.getElementById('viewer-sub');
+  try {
+    const res = await fetch('api/session');
+    if (res.status === 401) {
+      viewerEl.textContent = 'Session expired';
+      viewerSub.innerHTML = '<a href="login">Sign in again</a>';
       return;
     }
-    tableEmpty.hidden = true;
-
-    filtered.forEach(function (it) {
-      var low = it.qty <= it.reorder;
-      var tr = document.createElement('tr');
-      if (low) tr.className = 'row-low';
-
-      var tdItem = document.createElement('td');
-      tdItem.className = 'cell-item';
-      tdItem.textContent = it.name;
-
-      var tdSup = document.createElement('td');
-      tdSup.textContent = it.supplier;
-
-      var tdQty = document.createElement('td');
-      var qtyInput = document.createElement('input');
-      qtyInput.type = 'number';
-      qtyInput.className = 'qtyInput';
-      qtyInput.setAttribute('data-id', String(it.id));
-      qtyInput.value = String(it.qty);
-      qtyInput.min = '0';
-      qtyInput.step = '1';
-      qtyInput.setAttribute('aria-label', 'Quantity for ' + it.name);
-      tdQty.appendChild(qtyInput);
-
-      var tdReorder = document.createElement('td');
-      tdReorder.textContent = String(it.reorder);
-
-      var tdCost = document.createElement('td');
-      tdCost.textContent = fmt(it.unitCost);
-
-      var tdRestock = document.createElement('td');
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'restockBtn';
-      btn.setAttribute('data-id', String(it.id));
-      btn.textContent = 'Restock';
-      btn.setAttribute('aria-label', 'Restock ' + it.name);
-      tdRestock.appendChild(btn);
-
-      tr.appendChild(tdItem);
-      tr.appendChild(tdSup);
-      tr.appendChild(tdQty);
-      tr.appendChild(tdReorder);
-      tr.appendChild(tdCost);
-      tr.appendChild(tdRestock);
-      tableBody.appendChild(tr);
-    });
-  }
-
-  function updateTotal() {
-    var q = (searchInput.value || '').trim().toLowerCase();
-    var sup = filterSelect.value;
-    var total = 0;
-    items.forEach(function (it) {
-      var okName = !q || it.name.toLowerCase().indexOf(q) !== -1;
-      var okSup = !sup || it.supplier === sup;
-      if (okName && okSup) total += it.qty * it.unitCost;
-    });
-    totalValue.textContent = fmt(total);
-  }
-
-  function onQtyChange(e) {
-    var id = Number(e.target.getAttribute('data-id'));
-    var val = Number(e.target.value);
-    if (isNaN(val) || val < 0) val = 0;
-    var it = items.find(function (x) { return x.id === id; });
-    if (!it) return;
-    it.qty = val;
-    updateTotal();
-    var tr = e.target.closest('tr');
-    if (tr) {
-      if (val <= it.reorder) tr.classList.add('row-low');
-      else tr.classList.remove('row-low');
+    if (!res.ok) throw new Error('Session request failed');
+    const data = await res.json();
+    if (data.name) {
+      viewerEl.textContent = data.name;
+      viewerSub.textContent = data.email || 'Signed in';
+    } else {
+      viewerEl.textContent = 'Preview viewer';
+      viewerSub.textContent = 'Not signed in';
     }
+  } catch (err) {
+    viewerEl.textContent = 'Preview viewer';
+    viewerSub.textContent = 'Not signed in';
   }
+}
 
-  function onRestock(e) {
-    var btn = e.target.closest('button');
-    if (!btn) return;
-    var id = Number(btn.getAttribute('data-id'));
-    var it = items.find(function (x) { return x.id === id; });
-    if (!it) return;
-    it.qty = it.reorder * 2;
-    render();
-  }
+function init() {
+  initControls();
+  renderAll();
+  loadSession();
+  window.knowiReportReady = true;
+}
 
-  function init() {
-    buildFilter();
-    navCount.textContent = String(items.length);
-    render();
-
-    searchInput.addEventListener('input', render);
-    filterSelect.addEventListener('change', render);
-    tableBody.addEventListener('input', onQtyChange);
-    tableBody.addEventListener('click', onRestock);
-
-    window.knowiReportReady = true;
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
-})();
+document.addEventListener('DOMContentLoaded', init);
