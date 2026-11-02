@@ -1,317 +1,310 @@
 window.knowiReportReady = false;
 
-const state = {
-  amount: 350000,
-  rate: 6.5,
-  years: 30,
-  schedule: [],
-  visibleRows: 50,
-};
+(function () {
+  'use strict';
 
-const PAGE_SIZE = 50;
+  var PAGE_SIZE = 50;
 
-function el(id) {
-  return document.getElementById(id);
-}
+  var els = {
+    form: document.getElementById('calcForm'),
+    loanAmount: document.getElementById('loanAmount'),
+    interestRate: document.getElementById('interestRate'),
+    termYears: document.getElementById('termYears'),
+    calcBtn: document.getElementById('calcBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    formError: document.getElementById('formError'),
+    resultsCard: document.getElementById('resultsCard'),
+    chartCard: document.getElementById('chartCard'),
+    tableCard: document.getElementById('tableCard'),
+    monthlyPayment: document.getElementById('monthlyPayment'),
+    totalPaid: document.getElementById('totalPaid'),
+    totalInterest: document.getElementById('totalInterest'),
+    totalPayments: document.getElementById('totalPayments'),
+    balanceChart: document.getElementById('balanceChart'),
+    amortBody: document.getElementById('amortBody'),
+    prevPage: document.getElementById('prevPage'),
+    nextPage: document.getElementById('nextPage'),
+    pageInfo: document.getElementById('pageInfo'),
+    showMore: document.getElementById('showMore'),
+    navCount: document.getElementById('navCount')
+  };
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 2,
-  }).format(value);
-}
+  var state = {
+    rows: [],
+    payment: 0,
+    totalPaid: 0,
+    totalInterest: 0,
+    n: 0,
+    P: 0,
+    page: 1,
+    pageSize: PAGE_SIZE
+  };
 
-function formatNumber(value, digits = 0) {
-  return new Intl.NumberFormat('en-US', {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits,
-  }).format(value);
-}
-
-function computeSchedule(amount, annualRatePct, years) {
-  const months = Math.round(years * 12);
-  const monthlyRate = annualRatePct / 100 / 12;
-  let payment;
-  if (monthlyRate === 0) {
-    payment = amount / months;
-  } else {
-    payment = (amount * monthlyRate) / (1 - Math.pow(1 + monthlyRate, -months));
-  }
-
-  const rows = [];
-  let balance = amount;
-  let totalInterest = 0;
-
-  for (let m = 1; m <= months; m += 1) {
-    const interest = balance * monthlyRate;
-    let principal = payment - interest;
-    if (m === months) {
-      principal = balance;
-    }
-    balance = Math.max(0, balance - principal);
-    totalInterest += interest;
-    rows.push({
-      month: m,
-      payment: m === months ? principal + interest : payment,
-      principal,
-      interest,
-      balance,
+  function fmtMoney(v) {
+    return '$' + Number(v).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     });
   }
 
-  return { payment, months, rows, totalInterest, totalPaid: amount + totalInterest };
-}
-
-function validate(amount, rate, years) {
-  const errors = { amount: '', rate: '', years: '' };
-  if (!Number.isFinite(amount) || amount <= 0) {
-    errors.amount = 'Enter an amount greater than 0.';
-  } else if (amount > 100000000) {
-    errors.amount = 'Enter an amount under $100,000,000.';
-  }
-  if (!Number.isFinite(rate) || rate < 0) {
-    errors.rate = 'Enter a rate of 0 or more.';
-  } else if (rate > 50) {
-    errors.rate = 'Enter a rate under 50%.';
-  }
-  if (!Number.isFinite(years) || years <= 0) {
-    errors.years = 'Enter a term greater than 0.';
-  } else if (years > 50) {
-    errors.years = 'Enter a term under 50 years.';
-  }
-  return errors;
-}
-
-function renderErrors(errors) {
-  el('amount-error').textContent = errors.amount;
-  el('rate-error').textContent = errors.rate;
-  el('years-error').textContent = errors.years;
-  el('amount-input').setAttribute('aria-invalid', errors.amount ? 'true' : 'false');
-  el('rate-input').setAttribute('aria-invalid', errors.rate ? 'true' : 'false');
-  el('years-input').setAttribute('aria-invalid', errors.years ? 'true' : 'false');
-}
-
-function renderResults(amount, result) {
-  el('monthly-payment').textContent = formatCurrency(result.payment);
-  el('total-principal').textContent = formatCurrency(amount);
-  el('total-interest').textContent = formatCurrency(result.totalInterest);
-  el('total-paid').textContent = formatCurrency(result.totalPaid);
-  el('payoff-months').textContent = `${result.months} payments`;
-}
-
-function buildChart(rows) {
-  const svg = el('balance-chart');
-  svg.innerHTML = '';
-  if (!rows.length) return;
-
-  const width = 720;
-  const height = 280;
-  const padLeft = 72;
-  const padRight = 16;
-  const padTop = 16;
-  const padBottom = 32;
-  const plotW = width - padLeft - padRight;
-  const plotH = height - padTop - padBottom;
-
-  const maxBalance = rows[0].balance + rows[0].principal;
-  const maxMonth = rows[rows.length - 1].month;
-
-  const xFor = (month) => padLeft + (month / maxMonth) * plotW;
-  const yFor = (balance) => padTop + plotH - (balance / maxBalance) * plotH;
-
-  const points = [{ month: 0, balance: maxBalance }, ...rows];
-  const step = Math.max(1, Math.floor(points.length / 240));
-  const sampled = points.filter((_, i) => i % step === 0 || i === points.length - 1);
-
-  const linePath = sampled
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${xFor(p.month).toFixed(1)},${yFor(p.balance).toFixed(1)}`)
-    .join(' ');
-
-  const areaPath = `${linePath} L${xFor(sampled[sampled.length - 1].month).toFixed(1)},${(padTop + plotH).toFixed(1)} L${xFor(0).toFixed(1)},${(padTop + plotH).toFixed(1)} Z`;
-
-  const ns = 'http://www.w3.org/2000/svg';
-  const gridGroup = document.createElementNS(ns, 'g');
-  gridGroup.setAttribute('class', 'chart-grid');
-
-  const yTicks = 4;
-  for (let i = 0; i <= yTicks; i += 1) {
-    const value = maxBalance - (maxBalance / yTicks) * i;
-    const y = yFor(value);
-    const line = document.createElementNS(ns, 'line');
-    line.setAttribute('x1', String(padLeft));
-    line.setAttribute('x2', String(width - padRight));
-    line.setAttribute('y1', y.toFixed(1));
-    line.setAttribute('y2', y.toFixed(1));
-    gridGroup.appendChild(line);
-
-    const label = document.createElementNS(ns, 'text');
-    label.setAttribute('x', String(padLeft - 10));
-    label.setAttribute('y', (y + 4).toFixed(1));
-    label.setAttribute('text-anchor', 'end');
-    label.setAttribute('class', 'chart-axis-label');
-    label.textContent = `$${formatNumber(value / 1000, 0)}k`;
-    gridGroup.appendChild(label);
+  function fmtInt(v) {
+    return Number(v).toLocaleString('en-US');
   }
 
-  const totalYears = Math.ceil(maxMonth / 12);
-  const yearStep = totalYears > 20 ? 5 : totalYears > 10 ? 2 : 1;
-  for (let year = 0; year <= totalYears; year += yearStep) {
-    const month = Math.min(maxMonth, year * 12);
-    const x = xFor(month);
-    const label = document.createElementNS(ns, 'text');
-    label.setAttribute('x', x.toFixed(1));
-    label.setAttribute('y', String(height - padBottom + 20));
-    label.setAttribute('text-anchor', 'middle');
-    label.setAttribute('class', 'chart-axis-label');
-    label.textContent = `Yr ${year}`;
-    gridGroup.appendChild(label);
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 
-  const area = document.createElementNS(ns, 'path');
-  area.setAttribute('d', areaPath);
-  area.setAttribute('class', 'chart-area');
+  function compute() {
+    var P = parseFloat(els.loanAmount.value);
+    var rate = parseFloat(els.interestRate.value);
+    var years = parseFloat(els.termYears.value);
 
-  const line = document.createElementNS(ns, 'path');
-  line.setAttribute('d', linePath);
-  line.setAttribute('class', 'chart-line');
+    if (isNaN(P) || P <= 0) {
+      return { error: 'Enter a loan amount greater than zero.' };
+    }
+    if (isNaN(rate) || rate < 0) {
+      return { error: 'Enter an annual interest rate of zero or more.' };
+    }
+    if (isNaN(years) || years <= 0) {
+      return { error: 'Enter a term of at least one year.' };
+    }
 
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  svg.setAttribute('width', String(width));
-  svg.setAttribute('height', String(height));
-  svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `Remaining balance declining from ${formatCurrency(maxBalance)} to zero over ${maxMonth} months.`);
+    var n = Math.round(years * 12);
+    var r = rate / 1200;
+    var payment;
 
-  svg.appendChild(gridGroup);
-  svg.appendChild(area);
-  svg.appendChild(line);
-}
+    if (r === 0) {
+      payment = P / n;
+    } else {
+      var factor = Math.pow(1 + r, n);
+      payment = (P * r * factor) / (factor - 1);
+    }
 
-function renderTable() {
-  const tbody = el('amort-body');
-  tbody.innerHTML = '';
-  const rowsToShow = state.schedule.slice(0, state.visibleRows);
+    var rows = [];
+    var balance = P;
+    for (var m = 1; m <= n; m++) {
+      var interest = balance * r;
+      var principal = payment - interest;
+      balance -= principal;
+      if (m === n) {
+        balance = 0;
+        principal = payment - interest;
+      }
+      if (balance < 0) balance = 0;
+      rows.push({
+        month: m,
+        payment: payment,
+        principal: principal,
+        interest: interest,
+        balance: balance
+      });
+    }
 
-  if (!rowsToShow.length) {
-    el('amort-empty').hidden = false;
-    el('amort-table-wrap').hidden = true;
-    el('table-footer').hidden = true;
-    return;
+    var totalPaid = payment * n;
+    var totalInterest = totalPaid - P;
+
+    return {
+      P: P,
+      rate: rate,
+      years: years,
+      n: n,
+      payment: payment,
+      rows: rows,
+      totalPaid: totalPaid,
+      totalInterest: totalInterest
+    };
   }
 
-  el('amort-empty').hidden = true;
-  el('amort-table-wrap').hidden = false;
-
-  const frag = document.createDocumentFragment();
-  rowsToShow.forEach((row) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>Month ${row.month}</td>
-      <td>${formatCurrency(row.payment)}</td>
-      <td>${formatCurrency(row.principal)}</td>
-      <td>${formatCurrency(row.interest)}</td>
-      <td>${formatCurrency(row.balance)}</td>
-    `;
-    frag.appendChild(tr);
-  });
-  tbody.appendChild(frag);
-
-  const footer = el('table-footer');
-  if (state.visibleRows < state.schedule.length) {
-    footer.hidden = false;
-    el('show-more-btn').textContent = `Show ${Math.min(PAGE_SIZE, state.schedule.length - state.visibleRows)} more of ${state.schedule.length - state.visibleRows} remaining`;
-  } else {
-    footer.hidden = true;
-  }
-}
-
-function recalculate() {
-  const amount = parseFloat(el('amount-input').value);
-  const rate = parseFloat(el('rate-input').value);
-  const years = parseFloat(el('years-input').value);
-
-  const errors = validate(amount, rate, years);
-  renderErrors(errors);
-
-  const hasError = errors.amount || errors.rate || errors.years;
-  el('results-block').hidden = Boolean(hasError);
-  el('chart-card').hidden = Boolean(hasError);
-  el('table-card').hidden = Boolean(hasError);
-  el('invalid-state').hidden = !hasError;
-
-  if (hasError) {
-    state.schedule = [];
-    window.knowiReportReady = true;
-    return;
+  function renderResults(res) {
+    els.monthlyPayment.textContent = fmtMoney(res.payment);
+    els.totalPaid.textContent = fmtMoney(res.totalPaid);
+    els.totalInterest.textContent = fmtMoney(res.totalInterest);
+    els.totalPayments.textContent = fmtInt(res.n);
+    els.resultsCard.hidden = false;
   }
 
-  const result = computeSchedule(amount, rate, years);
-  state.schedule = result.rows;
-  state.visibleRows = PAGE_SIZE;
+  function renderTable(res) {
+    var rows = res.rows;
+    var total = rows.length;
+    var maxPage = Math.max(1, Math.ceil(total / state.pageSize));
+    if (state.page > maxPage) state.page = maxPage;
+    if (state.page < 1) state.page = 1;
 
-  renderResults(amount, result);
-  buildChart(result.rows);
-  renderTable();
+    var start = (state.page - 1) * state.pageSize;
+    var end = Math.min(start + state.pageSize, total);
 
-  window.knowiReportReady = true;
-}
+    var html = '';
+    for (var i = start; i < end; i++) {
+      var row = rows[i];
+      html +=
+        '<tr>' +
+        '<td class="num">' + row.month + '</td>' +
+        '<td class="num">' + fmtMoney(row.payment) + '</td>' +
+        '<td class="num">' + fmtMoney(row.principal) + '</td>' +
+        '<td class="num">' + fmtMoney(row.interest) + '</td>' +
+        '<td class="num">' + fmtMoney(row.balance) + '</td>' +
+        '</tr>';
+    }
+    els.amortBody.innerHTML = html;
 
-function debounce(fn, wait) {
-  let timer = null;
-  return (...args) => {
-    clearTimeout(timer);
-    timer = setTimeout(() => fn(...args), wait);
-  };
-}
+    els.pageInfo.textContent = 'Page ' + state.page + ' of ' + maxPage;
+    els.prevPage.disabled = state.page <= 1;
+    els.nextPage.disabled = state.page >= maxPage;
+    els.showMore.hidden = state.page >= maxPage;
+    els.tableCard.hidden = false;
+  }
 
-async function loadViewer() {
-  const avatar = el('viewer-avatar');
-  const nameEl = el('viewer-name');
-  const subEl = el('viewer-sub');
-  try {
-    const res = await fetch('api/me');
-    if (res.status === 401) {
-      nameEl.textContent = 'Session expired';
-      subEl.innerHTML = '<a href="login">Sign in again</a>';
-      avatar.textContent = '?';
+  function renderChart(res) {
+    var svg = els.balanceChart;
+    var W = 720, H = 340;
+    var m = { t: 20, r: 24, b: 46, l: 72 };
+    var plotW = W - m.l - m.r;
+    var plotH = H - m.t - m.b;
+    var x0 = m.l, y0 = m.t, y1 = m.t + plotH;
+    var maxBal = res.P;
+    var n = res.n;
+
+    function xPos(i) {
+      if (n <= 1) return x0;
+      return x0 + (i / n) * plotW;
+    }
+    function yPos(v) {
+      if (maxBal <= 0) return y1;
+      return y1 - (v / maxBal) * plotH;
+    }
+
+    var parts = [];
+
+    // Gridlines + y labels
+    var yTicks = 5;
+    for (var t = 0; t <= yTicks; t++) {
+      var val = (maxBal / yTicks) * t;
+      var y = yPos(val);
+      parts.push('<line x1="' + x0 + '" y1="' + y.toFixed(1) + '" x2="' + (x0 + plotW) + '" y2="' + y.toFixed(1) + '" stroke="#E4EBEB" stroke-width="1"></line>');
+      parts.push('<text x="' + (x0 - 10) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">$' + fmtInt(Math.round(val)) + '</text>');
+    }
+
+    // X labels (years)
+    var years = res.years;
+    var xTicks = Math.min(6, Math.max(1, Math.round(years)));
+    for (var k = 0; k <= xTicks; k++) {
+      var yr = (years / xTicks) * k;
+      var idx = Math.round(yr * 12);
+      var x = xPos(idx);
+      parts.push('<line x1="' + x.toFixed(1) + '" y1="' + y1 + '" x2="' + x.toFixed(1) + '" y2="' + (y1 + 5) + '" stroke="#C7D2D3" stroke-width="1"></line>');
+      parts.push('<text x="' + x.toFixed(1) + '" y="' + (y1 + 22) + '" text-anchor="middle" font-size="11" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">' + Math.round(yr) + '</text>');
+    }
+
+    // Axis lines
+    parts.push('<line x1="' + x0 + '" y1="' + y0 + '" x2="' + x0 + '" y2="' + y1 + '" stroke="#C7D2D3" stroke-width="1"></line>');
+    parts.push('<line x1="' + x0 + '" y1="' + y1 + '" x2="' + (x0 + plotW) + '" y2="' + y1 + '" stroke="#C7D2D3" stroke-width="1"></line>');
+
+    // Axis titles
+    parts.push('<text x="' + (x0 + plotW / 2) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="12" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">Years</text>');
+    parts.push('<text x="16" y="' + (m.t + plotH / 2) + '" text-anchor="middle" font-size="12" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" transform="rotate(-90 16 ' + (m.t + plotH / 2) + ')">Balance</text>');
+
+    // Build line + area points
+    var linePts = [];
+    var step = Math.max(1, Math.floor(n / 240));
+    for (var i = 0; i < n; i += step) {
+      linePts.push(xPos(i).toFixed(1) + ',' + yPos(res.rows[i].balance).toFixed(1));
+    }
+    // ensure last point
+    linePts.push(xPos(n).toFixed(1) + ',' + yPos(0).toFixed(1));
+
+    var lineStr = linePts.join(' ');
+    var areaStr = x0 + ',' + y1 + ' ' + lineStr + ' ' + (x0 + plotW) + ',' + y1;
+
+    parts.push('<polygon points="' + areaStr + '" fill="#4E6E78" fill-opacity="0.12"></polygon>');
+    parts.push('<polyline points="' + lineStr + '" fill="none" stroke="#4E6E78" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>');
+
+    // End marker
+    parts.push('<circle cx="' + xPos(n).toFixed(1) + '" cy="' + yPos(0).toFixed(1) + '" r="3" fill="#4E6E78"></circle>');
+
+    svg.innerHTML = parts.join('');
+    els.chartCard.hidden = false;
+  }
+
+  function updateNavCount() {
+    els.navCount.textContent = state.rows.length ? fmtInt(state.rows.length) : '0';
+  }
+
+  function showError(msg) {
+    if (msg) {
+      els.formError.textContent = msg;
+      els.formError.hidden = false;
+    } else {
+      els.formError.textContent = '';
+      els.formError.hidden = true;
+    }
+  }
+
+  function calculate() {
+    var res = compute();
+    if (res.error) {
+      showError(res.error);
       return;
     }
-    if (!res.ok) throw new Error('Request failed');
-    const data = await res.json();
-    if (data.viewer) {
-      const label = data.viewer.name || data.viewer.email || 'Signed in';
-      nameEl.textContent = label;
-      subEl.textContent = data.viewer.email && data.viewer.email !== label ? data.viewer.email : 'Signed in';
-      avatar.textContent = label.charAt(0).toUpperCase();
-    } else {
-      nameEl.textContent = 'Signed in';
-      subEl.textContent = 'Knowi account';
-      avatar.textContent = 'K';
-    }
-  } catch (err) {
-    nameEl.textContent = 'Signed in';
-    subEl.textContent = 'Knowi account';
-    avatar.textContent = 'K';
+    showError('');
+    state.rows = res.rows;
+    state.payment = res.payment;
+    state.totalPaid = res.totalPaid;
+    state.totalInterest = res.totalInterest;
+    state.n = res.n;
+    state.P = res.P;
+    state.page = 1;
+
+    renderResults(res);
+    renderChart(res);
+    renderTable(res);
+    updateNavCount();
+
+    window.knowiReportReady = true;
   }
-}
 
-function init() {
-  el('amount-input').value = state.amount;
-  el('rate-input').value = state.rate;
-  el('years-input').value = state.years;
+  function reset() {
+    els.loanAmount.value = '250000';
+    els.interestRate.value = '6.5';
+    els.termYears.value = '30';
+    showError('');
+    els.resultsCard.hidden = true;
+    els.chartCard.hidden = true;
+    els.tableCard.hidden = true;
+    els.amortBody.innerHTML = '';
+    els.balanceChart.innerHTML = '';
+    state.rows = [];
+    state.page = 1;
+    updateNavCount();
+    window.knowiReportReady = true;
+  }
 
-  const debounced = debounce(recalculate, 150);
-  ['amount-input', 'rate-input', 'years-input'].forEach((id) => {
-    el(id).addEventListener('input', debounced);
+  function goPage(delta) {
+    var maxPage = Math.max(1, Math.ceil(state.rows.length / state.pageSize));
+    var next = state.page + delta;
+    if (next < 1) next = 1;
+    if (next > maxPage) next = maxPage;
+    state.page = next;
+    renderTable({ rows: state.rows });
+  }
+
+  function showMore() {
+    state.pageSize += PAGE_SIZE;
+    renderTable({ rows: state.rows });
+  }
+
+  els.form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    calculate();
   });
 
-  el('show-more-btn').addEventListener('click', () => {
-    state.visibleRows = Math.min(state.schedule.length, state.visibleRows + PAGE_SIZE);
-    renderTable();
-  });
+  els.resetBtn.addEventListener('click', reset);
+  els.prevPage.addEventListener('click', function () { goPage(-1); });
+  els.nextPage.addEventListener('click', function () { goPage(1); });
+  els.showMore.addEventListener('click', showMore);
 
-  recalculate();
-  loadViewer();
-}
-
-document.addEventListener('DOMContentLoaded', init);
+  // Initial render with the default values
+  calculate();
+})();

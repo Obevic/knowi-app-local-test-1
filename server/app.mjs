@@ -1,41 +1,36 @@
 import express from 'express';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const webRoot = path.join(__dirname, '..', 'web');
-const indexHtmlPath = path.join(webRoot, 'index.html');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = Number(process.env.PORT) || 8080;
+
+// Resolve the web root (../web relative to this service file)
+const webRoot = path.resolve(__dirname, '..', 'web');
+const indexHtmlPath = path.join(webRoot, 'index.html');
+
+// Parse JSON bodies (no API routes use it, but keep it available and bounded)
 app.use(express.json({ limit: '256kb' }));
 
-function parseViewer(req) {
-  const header = req.headers['x-knowi-app-user'];
-  if (!header || typeof header !== 'string') return null;
-  try {
-    const json = Buffer.from(header, 'base64url').toString('utf8');
-    const data = JSON.parse(json);
-    if (data && typeof data === 'object') {
-      return { id: data.id, name: data.name, email: data.email };
-    }
-  } catch (err) {
-    return null;
-  }
-  return null;
-}
-
-app.get('/api/me', (req, res) => {
-  const viewer = parseViewer(req);
-  res.json({ viewer });
+// No /api/* routes are defined for this app.
+// Ensure unknown /api/* requests return a clean 404 rather than the SPA fallback.
+app.use('/api/', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
 });
 
+// Serve static web files (GET and HEAD / return index.html)
 app.use(express.static(webRoot));
 
+// SPA fallback for client-side routes (GET/HEAD only, never /api/*)
 app.use((req, res, next) => {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Not found' });
+  }
   res.sendFile(indexHtmlPath);
 });
 
-const port = Number(process.env.PORT);
-app.listen(port, '0.0.0.0');
+app.listen(PORT, '0.0.0.0');

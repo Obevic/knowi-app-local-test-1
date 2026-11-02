@@ -1,148 +1,145 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Mortgage Calculator</title>
-<link rel="stylesheet" href="app.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loan Calculator</title>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="app-shell">
-  <div class="mobile-topbar">
-    <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
-      <rect x="2" y="2" width="24" height="24" rx="6" fill="#375357"></rect>
-      <path d="M8 19V12.5L14 8l6 4.5V19" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"></path>
-    </svg>
-    <span class="brand-name">Mortgage Calculator</span>
-  </div>
-
-  <aside class="sidebar">
-    <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true">
-        <rect x="2" y="2" width="24" height="24" rx="6" fill="#375357"></rect>
-        <path d="M8 19V12.5L14 8l6 4.5V19" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round"></path>
-      </svg>
-      <span class="brand-name">Mortgage Calculator</span>
-    </div>
-
-    <nav class="nav" aria-label="Primary">
-      <a class="nav-link active" href="." aria-current="page">
-        <svg viewBox="0 0 20 20" aria-hidden="true">
-          <path d="M3 10.5L10 4l7 6.5" fill="none" stroke="#273D44" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"></path>
-          <path d="M5 9.5V16h10V9.5" fill="none" stroke="#273D44" stroke-width="1.6" stroke-linejoin="round"></path>
-        </svg>
-        Calculator
-      </a>
-    </nav>
-
-    <div class="viewer">
-      <div class="viewer-avatar" id="viewer-avatar" aria-hidden="true">K</div>
-      <div class="viewer-info">
-        <p class="viewer-name" id="viewer-name">Loading…</p>
-        <p class="viewer-sub" id="viewer-sub"></p>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" focusable="false">
+            <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="#375357" stroke-width="1.6"></rect>
+            <path d="M7 15.5 L11 11 L14 13.5 L17 8.5" fill="none" stroke="#375357" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+        </span>
+        <span class="brand-name">Loan Calculator</span>
       </div>
-    </div>
-  </aside>
 
-  <main class="main">
-    <div class="main-inner">
-      <header class="page-header">
-        <h1 class="page-title">Loan calculator</h1>
-        <p class="page-sub">Enter a loan amount, interest rate and term to see the monthly payment and the full payoff schedule.</p>
-      </header>
+      <nav class="nav" aria-label="Sections">
+        <a class="nav-link is-active" href="#calculator" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">
+              <rect x="4" y="3" width="16" height="18" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+              <path d="M8 7.5 H16 M8 11 H16 M8 14.5 H12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+            </svg>
+          </span>
+          <span class="nav-label">Calculator</span>
+          <span class="nav-pill" id="navCount" aria-hidden="true">0</span>
+        </a>
+      </nav>
 
-      <div class="layout-grid">
-        <section class="card" aria-labelledby="inputs-title">
+      <div class="viewer" id="viewer">
+        <span class="viewer-avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">
+            <circle cx="12" cy="9" r="3.4" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
+            <path d="M5.5 19c0-3.3 2.9-5.2 6.5-5.2s6.5 1.9 6.5 5.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+          </svg>
+        </span>
+        <span class="viewer-name">Guest</span>
+      </div>
+    </aside>
+
+    <main class="canvas">
+      <div class="content">
+        <header class="page-head">
+          <h1 class="page-title">Loan &amp; Mortgage Calculator</h1>
+          <p class="page-sub">Enter a loan amount, annual interest rate and term to see the monthly payment, a balance chart and the full amortization schedule.</p>
+        </header>
+
+        <section class="card" id="calculator" aria-labelledby="inputs-title">
           <h2 class="card-title" id="inputs-title">Loan details</h2>
-          <div class="field-group">
+          <form class="inputs" id="calcForm" novalidate>
             <div class="field">
-              <label for="amount-input">Loan amount</label>
-              <div class="field-input-wrap">
-                <span class="field-prefix" aria-hidden="true">$</span>
-                <input type="number" id="amount-input" class="has-prefix" min="1" step="1000" inputmode="decimal" aria-describedby="amount-error" />
+              <label class="field-label" for="loanAmount">Loan amount</label>
+              <div class="input-wrap">
+                <span class="input-prefix" aria-hidden="true">$</span>
+                <input class="input" type="number" id="loanAmount" name="loanAmount" min="0" step="0.01" inputmode="decimal" placeholder="250000" value="250000" required>
               </div>
-              <p class="field-error" id="amount-error" role="alert"></p>
             </div>
             <div class="field">
-              <label for="rate-input">Annual interest rate</label>
-              <div class="field-input-wrap">
-                <input type="number" id="rate-input" class="has-suffix" min="0" step="0.05" inputmode="decimal" aria-describedby="rate-error" />
-                <span class="field-suffix" aria-hidden="true">%</span>
+              <label class="field-label" for="interestRate">Annual interest rate</label>
+              <div class="input-wrap">
+                <input class="input" type="number" id="interestRate" name="interestRate" min="0" step="0.01" inputmode="decimal" placeholder="6.5" value="6.5" required>
+                <span class="input-suffix" aria-hidden="true">%</span>
               </div>
-              <p class="field-error" id="rate-error" role="alert"></p>
             </div>
             <div class="field">
-              <label for="years-input">Loan term</label>
-              <div class="field-input-wrap">
-                <input type="number" id="years-input" class="has-suffix" min="1" step="1" inputmode="numeric" aria-describedby="years-error" />
-                <span class="field-suffix" aria-hidden="true">yrs</span>
+              <label class="field-label" for="termYears">Term</label>
+              <div class="input-wrap">
+                <input class="input" type="number" id="termYears" name="termYears" min="0" step="1" inputmode="numeric" placeholder="30" value="30" required>
+                <span class="input-suffix" aria-hidden="true">years</span>
               </div>
-              <p class="field-error" id="years-error" role="alert"></p>
             </div>
-          </div>
+            <div class="actions">
+              <button class="btn btn-primary" type="submit" id="calcBtn">Calculate</button>
+              <button class="btn btn-ghost" type="button" id="resetBtn">Reset</button>
+            </div>
+            <p class="form-error" id="formError" role="alert" hidden></p>
+          </form>
+        </section>
 
-          <div class="result-block" id="results-block">
-            <p class="result-label">Monthly payment</p>
-            <p class="result-value" id="monthly-payment">—</p>
-            <div class="result-meta">
-              <div class="result-meta-item">
-                <p class="result-meta-label">Principal</p>
-                <p class="result-meta-value" id="total-principal">—</p>
-              </div>
-              <div class="result-meta-item">
-                <p class="result-meta-label">Total interest</p>
-                <p class="result-meta-value" id="total-interest">—</p>
-              </div>
-              <div class="result-meta-item">
-                <p class="result-meta-label">Total paid</p>
-                <p class="result-meta-value" id="total-paid">—</p>
-              </div>
-              <div class="result-meta-item">
-                <p class="result-meta-label">Schedule length</p>
-                <p class="result-meta-value" id="payoff-months">—</p>
-              </div>
-            </div>
+        <section class="card" id="resultsCard" aria-labelledby="results-title" hidden>
+          <h2 class="card-title" id="results-title">Monthly payment</h2>
+          <div class="payment">
+            <span class="payment-value" id="monthlyPayment">$0.00</span>
+            <span class="payment-unit">per month</span>
           </div>
+          <dl class="facts">
+            <div class="fact">
+              <dt class="fact-label">Total paid</dt>
+              <dd class="fact-value" id="totalPaid">$0.00</dd>
+            </div>
+            <div class="fact">
+              <dt class="fact-label">Total interest</dt>
+              <dd class="fact-value" id="totalInterest">$0.00</dd>
+            </div>
+            <div class="fact">
+              <dt class="fact-label">Number of payments</dt>
+              <dd class="fact-value" id="totalPayments">0</dd>
+            </div>
+          </dl>
+        </section>
 
-          <div class="empty-state" id="invalid-state" hidden>
-            Fix the highlighted fields above to see the payment and schedule.
+        <section class="card" id="chartCard" aria-labelledby="chart-title" hidden>
+          <h2 class="card-title" id="chart-title">Remaining balance over time</h2>
+          <div class="chart-wrap">
+            <svg id="balanceChart" class="chart" viewBox="0 0 720 340" role="img" aria-label="Line chart of the remaining loan balance over the life of the loan"></svg>
           </div>
         </section>
 
-        <div>
-          <section class="card" id="chart-card" aria-labelledby="chart-title">
-            <h2 class="card-title" id="chart-title">Remaining balance over time</h2>
-            <div class="chart-wrap">
-              <svg class="chart-svg" id="balance-chart" width="720" height="280" viewBox="0 0 720 280"></svg>
+        <section class="card" id="tableCard" aria-labelledby="table-title" hidden>
+          <h2 class="card-title" id="table-title">Amortization schedule</h2>
+          <div class="table-scroll">
+            <table class="amort" id="amortTable">
+              <thead>
+                <tr>
+                  <th scope="col" class="num">Month</th>
+                  <th scope="col" class="num">Payment</th>
+                  <th scope="col" class="num">Principal</th>
+                  <th scope="col" class="num">Interest</th>
+                  <th scope="col" class="num">Remaining balance</th>
+                </tr>
+              </thead>
+              <tbody id="amortBody"></tbody>
+            </table>
+          </div>
+          <div class="table-controls">
+            <div class="pager">
+              <button class="btn btn-ghost btn-sm" type="button" id="prevPage" aria-label="Previous page">Previous</button>
+              <span class="page-info" id="pageInfo">Page 1 of 1</span>
+              <button class="btn btn-ghost btn-sm" type="button" id="nextPage" aria-label="Next page">Next</button>
             </div>
-          </section>
-
-          <section class="card" id="table-card" aria-labelledby="table-title">
-            <h2 class="card-title" id="table-title">Amortization schedule</h2>
-            <div class="empty-state" id="amort-empty" hidden>No payments to show.</div>
-            <div class="table-scroll" id="amort-table-wrap">
-              <table class="amort">
-                <thead>
-                  <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col">Payment</th>
-                    <th scope="col">Principal</th>
-                    <th scope="col">Interest</th>
-                    <th scope="col">Remaining balance</th>
-                  </tr>
-                </thead>
-                <tbody id="amort-body"></tbody>
-              </table>
-            </div>
-            <div class="table-footer" id="table-footer" hidden>
-              <button type="button" class="btn btn-secondary" id="show-more-btn">Show more</button>
-            </div>
-          </section>
-        </div>
+            <button class="btn btn-ghost btn-sm" type="button" id="showMore">Show more</button>
+          </div>
+        </section>
       </div>
-    </div>
-  </main>
-</div>
-<script src="app.js"></script>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>

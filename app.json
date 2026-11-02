@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Loan calculator"}],"branding":{"name":"Mortgage Calculator","colors":{"background":"#f3f5f5","surface":"#ffffff","text":"#1e2f35","muted":"#56666d","border":"#dce3e4","button":"#375357","buttonText":"#ffffff"}}}
+{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Loan / Mortgage Calculator"}]}
