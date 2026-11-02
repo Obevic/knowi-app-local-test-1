@@ -1,425 +1,453 @@
 window.knowiReportReady = false;
 
 (function () {
-  "use strict";
+  'use strict';
 
-  var FIELDS = ["AE_Name", "Amount", "Company", "Created_Date", "Opportunity_ID", "Probability", "Product", "Region", "SDR_Name", "Stage"];
-  var PAGE_SIZE = 50;
+  const STATUSES = ['To do', 'In progress', 'Done'];
+  const PAGE_SIZE = 50;
 
-  var state = {
-    columns: [],
-    rows: [],
-    truncated: false,
-    filtered: [],
+  const state = {
+    tasks: [],
+    currentFilter: 'All',
+    editingId: null,
+    deletingId: null,
     visibleCount: PAGE_SIZE,
-    sort: { field: "Created_Date", dir: "desc" },
-    filters: { Region: "", Stage: "", Product: "", AE_Name: "", SDR_Name: "" },
-    search: ""
+    loading: false,
+    saving: false,
   };
 
-  var els = {};
+  // ---- Element refs ----
+  const $ = (id) => document.getElementById(id);
+  const taskList = $('taskList');
+  const filterBar = $('filterBar');
+  const navCount = $('navCount');
+  const listMeta = $('listMeta');
+  const loadingState = $('loadingState');
+  const errorState = $('errorState');
+  const emptyState = $('emptyState');
+  const emptyTitle = $('emptyTitle');
+  const emptyBody = $('emptyBody');
+  const errorBody = $('errorBody');
+  const retryBtn = $('retryBtn');
+  const addBtn = $('addBtn');
+  const emptyAddBtn = $('emptyAddBtn');
 
-  document.addEventListener("DOMContentLoaded", init);
+  const taskModal = $('taskModal');
+  const modalTitle = $('modalTitle');
+  const modalClose = $('modalClose');
+  const modalCancel = $('modalCancel');
+  const modalSave = $('modalSave');
+  const taskForm = $('taskForm');
+  const fTitle = $('fTitle');
+  const fOwner = $('fOwner');
+  const fStatus = $('fStatus');
 
-  function init() {
-    els.skeleton = document.getElementById("skeleton");
-    els.errorState = document.getElementById("error-state");
-    els.sessionExpired = document.getElementById("session-expired");
-    els.emptyState = document.getElementById("empty-state");
-    els.content = document.getElementById("content");
-    els.summaryStats = document.getElementById("summary-stats");
-    els.truncationNote = document.getElementById("truncation-note");
-    els.tbody = document.getElementById("ledger-body");
-    els.listStatus = document.getElementById("list-status");
-    els.showMoreBtn = document.getElementById("show-more");
-    els.clearBtn = document.getElementById("clear-filters");
-    els.searchInput = document.getElementById("search-input");
-    els.navCount = document.getElementById("nav-count");
-    els.viewerName = document.getElementById("viewer-name");
-    els.viewerSub = document.getElementById("viewer-sub");
-    els.viewerAvatar = document.getElementById("viewer-avatar");
-    els.errorRetry = document.getElementById("error-retry");
+  const confirmModal = $('confirmModal');
+  const confirmBody = $('confirmBody');
+  const confirmCancel = $('confirmCancel');
+  const confirmDelete = $('confirmDelete');
 
-    var filterSelects = ["Region", "Stage", "Product", "AE_Name", "SDR_Name"];
-    filterSelects.forEach(function (f) {
-      var sel = document.getElementById("filter-" + f);
-      if (sel) {
-        sel.addEventListener("change", function () {
-          state.filters[f] = sel.value;
-          state.visibleCount = PAGE_SIZE;
-          applyFilters();
-        });
-      }
+  const toast = $('toast');
+  let toastTimer = null;
+
+  // ---- Helpers ----
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function statusClass(status) {
+    if (status === 'Done') return 'st-done';
+    if (status === 'In progress') return 'st-progress';
+    return 'st-todo';
+  }
+
+  function formatDate(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return '—';
+    const opts = { year: 'numeric', month: 'short', day: 'numeric' };
+    return d.toLocaleDateString(undefined, opts);
+  }
+
+  function showToast(message, kind) {
+    if (toastTimer) clearTimeout(toastTimer);
+    toast.textContent = message;
+    toast.className = 'toast ' + (kind === 'error' ? 'toast-error' : 'toast-ok');
+    toast.hidden = false;
+    toastTimer = setTimeout(() => {
+      toast.hidden = true;
+      toast.className = 'toast';
+    }, 2600);
+  }
+
+  function setStates({ loading, error, empty }) {
+    loadingState.hidden = !loading;
+    errorState.hidden = !error;
+    emptyState.hidden = !empty;
+    taskList.hidden = loading || error || empty;
+  }
+
+  // ---- API ----
+  async function api(path, options) {
+    const opts = options || {};
+    const res = await fetch(path, {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = null;
+    }
+    if (!res.ok) {
+      const msg = (data && data.error) || 'Request failed';
+      const err = new Error(msg);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  }
 
-    els.searchInput.addEventListener("input", debounce(function () {
-      state.search = els.searchInput.value.trim().toLowerCase();
+  // ---- Data ----
+  async function loadTasks() {
+    state.loading = true;
+    setStates({ loading: true, error: false, empty: false });
+    try {
+      const data = await api('api/tasks');
+      state.tasks = data.tasks || [];
       state.visibleCount = PAGE_SIZE;
-      applyFilters();
-    }, 200));
-
-    els.clearBtn.addEventListener("click", function () {
-      filterSelects.forEach(function (f) {
-        state.filters[f] = "";
-        var sel = document.getElementById("filter-" + f);
-        if (sel) sel.value = "";
-      });
-      state.search = "";
-      els.searchInput.value = "";
-      state.visibleCount = PAGE_SIZE;
-      applyFilters();
-    });
-
-    els.showMoreBtn.addEventListener("click", function () {
-      state.visibleCount += PAGE_SIZE;
-      renderTable();
-    });
-
-    document.querySelectorAll("th[data-sort-field] button").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var field = btn.closest("th").getAttribute("data-sort-field");
-        if (state.sort.field === field) {
-          state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
-        } else {
-          state.sort.field = field;
-          state.sort.dir = field === "Company" ? "asc" : "desc";
-        }
-        updateSortIndicators();
-        applyFilters();
-      });
-    });
-
-    var retry = document.getElementById("error-retry");
-    if (retry) retry.addEventListener("click", loadData);
-
-    loadSession();
-    loadData();
-  }
-
-  function debounce(fn, ms) {
-    var t;
-    return function () {
-      clearTimeout(t);
-      var args = arguments;
-      t = setTimeout(function () { fn.apply(null, args); }, ms);
-    };
-  }
-
-  function loadSession() {
-    fetch("api/session").then(function (r) {
-      if (!r.ok) return null;
-      return r.json();
-    }).then(function (data) {
-      if (data && data.name) {
-        els.viewerName.textContent = data.name;
-        els.viewerSub.textContent = data.email || "Signed in";
-        els.viewerAvatar.textContent = data.name.charAt(0).toUpperCase();
-      } else {
-        els.viewerName.textContent = "Previewing";
-        els.viewerSub.textContent = "Guest viewer";
-        els.viewerAvatar.textContent = "P";
-      }
-    }).catch(function () {
-      els.viewerName.textContent = "Previewing";
-      els.viewerSub.textContent = "Guest viewer";
-      els.viewerAvatar.textContent = "P";
-    });
-  }
-
-  function loadData() {
-    showOnly("skeleton");
-    fetch("api/sales").then(function (r) {
-      if (r.status === 401) {
-        showOnly("sessionExpired");
-        markReady();
-        throw new Error("session-expired");
-      }
-      if (!r.ok) {
-        throw new Error("load-failed");
-      }
-      return r.json();
-    }).then(function (data) {
-      state.columns = data.columns || [];
-      state.rows = normalizeRows(data.columns, data.rows || []);
-      state.truncated = !!data.truncated;
-
-      if (state.rows.length === 0) {
-        showOnly("emptyState");
-        markReady();
+      render();
+    } catch (err) {
+      if (err.status === 401) {
+        showSessionExpired();
         return;
       }
-
-      buildFilterOptions();
-      showOnly("content");
-      if (state.truncated) {
-        els.truncationNote.hidden = false;
-        els.truncationNote.textContent = "Showing the first " + state.rows.length.toLocaleString() + " opportunities loaded from the dataset.";
-      } else {
-        els.truncationNote.hidden = true;
-      }
-      updateSortIndicators();
-      applyFilters();
-      markReady();
-    }).catch(function (err) {
-      if (err.message === "session-expired") return;
-      showOnly("errorState");
-      markReady();
-    });
+      state.tasks = [];
+      setStates({ loading: false, error: true, empty: false });
+      errorBody.textContent =
+        err.status === 503
+          ? 'The task database is not available right now. Please try again in a moment.'
+          : 'Something went wrong while fetching your tasks.';
+    } finally {
+      state.loading = false;
+    }
   }
 
-  function markReady() {
+  function showSessionExpired() {
+    loadingState.hidden = true;
+    errorState.hidden = false;
+    emptyState.hidden = true;
+    taskList.hidden = true;
+    emptyTitle.textContent = 'Session expired';
+    emptyBody.textContent = 'Your session has ended. Please sign in again to continue.';
+    emptyAddBtn.hidden = true;
+    retryBtn.hidden = true;
+    errorBody.textContent = '';
+    // Reuse empty state for a clean sign-in prompt
+    errorState.hidden = true;
+    emptyState.hidden = false;
+    emptyTitle.textContent = 'Session expired';
+    emptyBody.textContent = 'Please sign in again to continue.';
+    emptyAddBtn.hidden = true;
+    retryBtn.hidden = true;
+  }
+
+  // ---- Rendering ----
+  function render() {
+    renderFilter();
+    renderList();
+    renderMeta();
     window.knowiReportReady = true;
   }
 
-  function showOnly(key) {
-    var keys = ["skeleton", "errorState", "sessionExpired", "emptyState", "content"];
-    keys.forEach(function (k) {
-      if (els[k]) els[k].hidden = k !== key;
-    });
-  }
+  function renderFilter() {
+    const present = new Set(state.tasks.map((t) => t.status));
+    const options = ['All'].concat(STATUSES.filter((s) => present.has(s)));
+    // Keep current filter if it still exists, else fall back to All
+    if (!options.includes(state.currentFilter)) state.currentFilter = 'All';
 
-  function normalizeRows(columns, rows) {
-    var iProb = columns.indexOf("Probability");
-
-    var maxProb = 0;
-    rows.forEach(function (r) {
-      var v = Number(r[iProb]);
-      if (!isNaN(v) && v > maxProb) maxProb = v;
-    });
-    var probScale = maxProb <= 1.5 ? 100 : 1;
-
-    return rows.map(function (r) {
-      var out = {};
-      columns.forEach(function (c, i) {
-        out[c] = r[i];
+    filterBar.innerHTML = '';
+    options.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip' + (opt === state.currentFilter ? ' chip-active' : '');
+      btn.setAttribute('aria-pressed', opt === state.currentFilter ? 'true' : 'false');
+      btn.textContent = opt;
+      btn.addEventListener('click', () => {
+        state.currentFilter = opt;
+        state.visibleCount = PAGE_SIZE;
+        renderFilter();
+        renderList();
+        renderMeta();
       });
-      out._amount = Number(out.Amount) || 0;
-      var p = Number(out.Probability);
-      out._probability = isNaN(p) ? null : p * probScale;
-      var d = out.Created_Date ? new Date(out.Created_Date) : null;
-      out._date = d && !isNaN(d.getTime()) ? d : null;
-      return out;
+      filterBar.appendChild(btn);
     });
   }
 
-  function uniqueSorted(field) {
-    var set = {};
-    state.rows.forEach(function (r) {
-      var v = r[field];
-      if (v !== null && v !== undefined && v !== "") set[v] = true;
-    });
-    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+  function filteredTasks() {
+    if (state.currentFilter === 'All') return state.tasks;
+    return state.tasks.filter((t) => t.status === state.currentFilter);
   }
 
-  function buildFilterOptions() {
-    ["Region", "Stage", "Product", "AE_Name", "SDR_Name"].forEach(function (f) {
-      var sel = document.getElementById("filter-" + f);
-      if (!sel) return;
-      var values = uniqueSorted(f);
-      sel.innerHTML = "";
-      var allOpt = document.createElement("option");
-      allOpt.value = "";
-      allOpt.textContent = "All " + sel.getAttribute("data-label");
-      sel.appendChild(allOpt);
-      values.forEach(function (v) {
-        var opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = v;
-        sel.appendChild(opt);
-      });
-    });
-  }
+  function renderList() {
+    const rows = filteredTasks();
+    const visible = rows.slice(0, state.visibleCount);
 
-  function applyFilters() {
-    var f = state.filters;
-    var search = state.search;
+    taskList.innerHTML = '';
+    visible.forEach((task) => {
+      const li = document.createElement('li');
+      li.className = 'ledger-row';
 
-    var result = state.rows.filter(function (r) {
-      if (f.Region && r.Region !== f.Region) return false;
-      if (f.Stage && r.Stage !== f.Stage) return false;
-      if (f.Product && r.Product !== f.Product) return false;
-      if (f.AE_Name && r.AE_Name !== f.AE_Name) return false;
-      if (f.SDR_Name && r.SDR_Name !== f.SDR_Name) return false;
-      if (search) {
-        var company = (r.Company || "").toString().toLowerCase();
-        var oppId = (r.Opportunity_ID || "").toString().toLowerCase();
-        if (company.indexOf(search) === -1 && oppId.indexOf(search) === -1) return false;
-      }
-      return true;
-    });
+      const title = document.createElement('span');
+      title.className = 'cell-title';
+      title.textContent = task.title;
 
-    var field = state.sort.field;
-    var dir = state.sort.dir === "asc" ? 1 : -1;
-    result.sort(function (a, b) {
-      var av, bv;
-      if (field === "Amount") { av = a._amount; bv = b._amount; }
-      else if (field === "Probability") { av = a._probability || 0; bv = b._probability || 0; }
-      else if (field === "Created_Date") { av = a._date ? a._date.getTime() : 0; bv = b._date ? b._date.getTime() : 0; }
-      else { av = (a[field] || "").toString().toLowerCase(); bv = (b[field] || "").toString().toLowerCase(); }
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
-    });
+      const owner = document.createElement('span');
+      owner.className = 'cell-owner';
+      owner.textContent = task.owner || '—';
 
-    state.filtered = result;
-    renderSummary();
-    renderTable();
-  }
+      const status = document.createElement('span');
+      status.className = 'cell-status';
+      const pill = document.createElement('span');
+      pill.className = 'status-pill ' + statusClass(task.status);
+      pill.textContent = task.status;
+      status.appendChild(pill);
 
-  function renderSummary() {
-    var rows = state.filtered;
-    var count = rows.length;
-    var totalAmount = 0;
-    var probSum = 0;
-    var probCount = 0;
+      const date = document.createElement('span');
+      date.className = 'cell-date';
+      date.textContent = formatDate(task.created_at);
 
-    rows.forEach(function (r) {
-      totalAmount += r._amount;
-      if (r._probability !== null) {
-        probSum += r._probability;
-        probCount++;
-      }
+      const actions = document.createElement('span');
+      actions.className = 'cell-actions';
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'row-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.setAttribute('aria-label', 'Edit task ' + task.title);
+      editBtn.addEventListener('click', () => openEdit(task));
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'row-btn row-btn-danger';
+      delBtn.textContent = 'Delete';
+      delBtn.setAttribute('aria-label', 'Delete task ' + task.title);
+      delBtn.addEventListener('click', () => openDelete(task));
+
+      actions.appendChild(editBtn);
+      actions.appendChild(delBtn);
+
+      li.appendChild(title);
+      li.appendChild(owner);
+      li.appendChild(status);
+      li.appendChild(date);
+      li.appendChild(actions);
+      taskList.appendChild(li);
     });
 
-    var avgAmount = count ? totalAmount / count : 0;
-    var avgProb = probCount ? probSum / probCount : 0;
-
-    els.summaryStats.innerHTML = "";
-    addStat("Opportunities", count.toLocaleString());
-    addStat("Total amount", formatCurrency(totalAmount));
-    addStat("Average amount", formatCurrency(avgAmount));
-    addStat("Average probability", probCount ? Math.round(avgProb) + "%" : "—");
-
-    if (els.navCount) els.navCount.textContent = state.rows.length.toLocaleString();
-  }
-
-  function addStat(label, value) {
-    var wrap = document.createElement("div");
-    wrap.className = "stat";
-    var l = document.createElement("p");
-    l.className = "stat-label";
-    l.textContent = label;
-    var v = document.createElement("p");
-    v.className = "stat-value";
-    v.textContent = value;
-    wrap.appendChild(l);
-    wrap.appendChild(v);
-    els.summaryStats.appendChild(wrap);
-  }
-
-  function formatCurrency(n) {
-    if (!isFinite(n)) n = 0;
-    return "$" + Math.round(n).toLocaleString();
-  }
-
-  function formatDate(d) {
-    if (!d) return "—";
-    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-  }
-
-  function classifyStage(stage) {
-    var s = (stage || "").toString().toLowerCase();
-    if (s.indexOf("won") !== -1) return "pill-done";
-    if (s.indexOf("lost") !== -1) return "pill-risk";
-    if (s.indexOf("negotia") !== -1 || s.indexOf("proposal") !== -1 || s.indexOf("pending") !== -1 || s.indexOf("review") !== -1) return "pill-wait";
-    return "pill-neutral";
-  }
-
-  function renderTable() {
-    var rows = state.filtered;
-    var visible = rows.slice(0, state.visibleCount);
-    els.tbody.innerHTML = "";
-
-    visible.forEach(function (r) {
-      var tr = document.createElement("tr");
-
-      tr.appendChild(td(makeCompanyCell(r)));
-      tr.appendChild(td(textNode(r.AE_Name)));
-      tr.appendChild(td(textNode(r.SDR_Name)));
-      tr.appendChild(td(textNode(r.Region)));
-      tr.appendChild(td(textNode(r.Product)));
-      tr.appendChild(td(makeStagePill(r.Stage)));
-      tr.appendChild(td(makeProbCell(r._probability)));
-      var amountTd = td(textNode(formatCurrency(r._amount)));
-      amountTd.classList.add("amount-cell");
-      tr.appendChild(amountTd);
-      tr.appendChild(td(textNode(formatDate(r._date))));
-
-      els.tbody.appendChild(tr);
-    });
-
-    els.listStatus.textContent = rows.length
-      ? "Showing " + Math.min(state.visibleCount, rows.length).toLocaleString() + " of " + rows.length.toLocaleString() + " opportunities"
-      : "No opportunities match these filters";
-
-    els.showMoreBtn.hidden = state.visibleCount >= rows.length;
-  }
-
-  function td(node) {
-    var cell = document.createElement("td");
-    cell.appendChild(node);
-    return cell;
-  }
-
-  function textNode(text) {
-    var span = document.createElement("span");
-    span.textContent = text || "—";
-    return span;
-  }
-
-  function makeCompanyCell(r) {
-    var wrap = document.createElement("span");
-    var name = document.createElement("span");
-    name.className = "cell-company";
-    name.textContent = r.Company || "Unnamed company";
-    var id = document.createElement("span");
-    id.className = "cell-id";
-    id.textContent = r.Opportunity_ID || "";
-    wrap.appendChild(name);
-    wrap.appendChild(id);
-    return wrap;
-  }
-
-  function makeStagePill(stage) {
-    var span = document.createElement("span");
-    span.className = "pill " + classifyStage(stage);
-    span.textContent = stage || "—";
-    return span;
-  }
-
-  function makeProbCell(prob) {
-    var wrap = document.createElement("span");
-    wrap.className = "prob-wrap";
-    if (prob === null || prob === undefined || isNaN(prob)) {
-      wrap.appendChild(textNode(null));
-      return wrap;
+    // Empty state
+    if (state.tasks.length === 0) {
+      emptyTitle.textContent = 'No tasks yet';
+      emptyBody.textContent = 'Add your first task to start tracking work.';
+      emptyAddBtn.hidden = false;
+      setStates({ loading: false, error: false, empty: true });
+      return;
     }
-    var pct = Math.max(0, Math.min(100, prob));
-    var track = document.createElement("span");
-    track.className = "prob-track";
-    var fill = document.createElement("span");
-    fill.className = "prob-fill";
-    fill.style.width = pct + "%";
-    track.appendChild(fill);
-    var text = document.createElement("span");
-    text.className = "prob-text";
-    text.textContent = Math.round(pct) + "%";
-    wrap.appendChild(track);
-    wrap.appendChild(text);
-    return wrap;
+
+    if (rows.length === 0) {
+      emptyTitle.textContent = 'No tasks in this view';
+      emptyBody.textContent =
+        'There are no tasks with the status “' + state.currentFilter + '”.';
+      emptyAddBtn.hidden = true;
+      setStates({ loading: false, error: false, empty: true });
+      return;
+    }
+
+    setStates({ loading: false, error: false, empty: false });
+
+    // Show more
+    const more = document.createElement('li');
+    more.className = 'ledger-more';
+    if (rows.length > state.visibleCount) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn-secondary btn-sm';
+      btn.textContent = 'Show more (' + (rows.length - state.visibleCount) + ' remaining)';
+      btn.addEventListener('click', () => {
+        state.visibleCount += PAGE_SIZE;
+        renderList();
+      });
+      more.appendChild(btn);
+      taskList.appendChild(more);
+    }
   }
 
-  function updateSortIndicators() {
-    document.querySelectorAll("th[data-sort-field]").forEach(function (th) {
-      var field = th.getAttribute("data-sort-field");
-      var arrow = th.querySelector(".sort-arrow");
-      if (field === state.sort.field) {
-        arrow.textContent = state.sort.dir === "asc" ? "▲" : "▼";
-        th.setAttribute("aria-sort", state.sort.dir === "asc" ? "ascending" : "descending");
-      } else {
-        arrow.textContent = "";
-        th.removeAttribute("aria-sort");
-      }
-    });
+  function renderMeta() {
+    const total = state.tasks.length;
+    navCount.textContent = String(total);
+    const rows = filteredTasks();
+    if (state.currentFilter === 'All') {
+      listMeta.textContent = total + (total === 1 ? ' task' : ' tasks');
+    } else {
+      listMeta.textContent = rows.length + ' of ' + total;
+    }
   }
+
+  // ---- Modal: add / edit ----
+  let lastFocused = null;
+
+  function openModal(overlay) {
+    lastFocused = document.activeElement;
+    overlay.hidden = false;
+    // focus first field
+    setTimeout(() => {
+      const first = overlay.querySelector('input, select, button');
+      if (first) first.focus();
+    }, 0);
+  }
+
+  function closeModals() {
+    taskModal.hidden = true;
+    confirmModal.hidden = true;
+    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+  }
+
+  function openAdd() {
+    state.editingId = null;
+    modalTitle.textContent = 'Add task';
+    fTitle.value = '';
+    fOwner.value = '';
+    fStatus.value = 'To do';
+    modalSave.disabled = false;
+    openModal(taskModal);
+  }
+
+  function openEdit(task) {
+    state.editingId = task.id;
+    modalTitle.textContent = 'Edit task';
+    fTitle.value = task.title;
+    fOwner.value = task.owner;
+    fStatus.value = task.status;
+    modalSave.disabled = false;
+    openModal(taskModal);
+  }
+
+  async function saveTask(e) {
+    e.preventDefault();
+    if (state.saving) return;
+    const title = fTitle.value.trim();
+    const owner = fOwner.value.trim();
+    const status = fStatus.value;
+
+    if (!title) {
+      fTitle.focus();
+      showToast('Title is required', 'error');
+      return;
+    }
+    if (!owner) {
+      fOwner.focus();
+      showToast('Owner is required', 'error');
+      return;
+    }
+
+    state.saving = true;
+    modalSave.disabled = true;
+    try {
+      if (state.editingId === null) {
+        const data = await api('api/tasks', {
+          method: 'POST',
+          body: { title, owner, status },
+        });
+        state.tasks.unshift(data.task);
+        showToast('Task added');
+      } else {
+        const data = await api('api/tasks/' + state.editingId, {
+          method: 'PATCH',
+          body: { title, owner, status },
+        });
+        const idx = state.tasks.findIndex((t) => t.id === state.editingId);
+        if (idx !== -1) state.tasks[idx] = data.task;
+        showToast('Task updated');
+      }
+      closeModals();
+      state.visibleCount = PAGE_SIZE;
+      render();
+    } catch (err) {
+      if (err.status === 401) {
+        closeModals();
+        showSessionExpired();
+        return;
+      }
+      showToast(err.message || 'Could not save task', 'error');
+    } finally {
+      state.saving = false;
+      modalSave.disabled = false;
+    }
+  }
+
+  // ---- Delete ----
+  function openDelete(task) {
+    state.deletingId = task.id;
+    confirmBody.textContent =
+      'Delete “' + task.title + '”? This can’t be undone.';
+    openModal(confirmModal);
+  }
+
+  async function doDelete() {
+    if (state.deletingId === null) return;
+    const id = state.deletingId;
+    confirmDelete.disabled = true;
+    try {
+      await api('api/tasks/' + id, { method: 'DELETE' });
+      state.tasks = state.tasks.filter((t) => t.id !== id);
+      state.deletingId = null;
+      closeModals();
+      showToast('Task deleted');
+      render();
+    } catch (err) {
+      if (err.status === 401) {
+        closeModals();
+        showSessionExpired();
+        return;
+      }
+      showToast(err.message || 'Could not delete task', 'error');
+    } finally {
+      confirmDelete.disabled = false;
+    }
+  }
+
+  // ---- Wire up ----
+  addBtn.addEventListener('click', openAdd);
+  emptyAddBtn.addEventListener('click', openAdd);
+  retryBtn.addEventListener('click', loadTasks);
+  modalClose.addEventListener('click', closeModals);
+  modalCancel.addEventListener('click', closeModals);
+  taskForm.addEventListener('submit', saveTask);
+  confirmCancel.addEventListener('click', closeModals);
+  confirmDelete.addEventListener('click', doDelete);
+
+  // Close on overlay click
+  [taskModal, confirmModal].forEach((overlay) => {
+    overlay.addEventListener('mousedown', (e) => {
+      if (e.target === overlay) closeModals();
+    });
+  });
+
+  // Escape to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!taskModal.hidden || !confirmModal.hidden) closeModals();
+    }
+  });
+
+  // ---- Init ----
+  loadTasks();
 })();
