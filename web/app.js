@@ -6,269 +6,165 @@ window.knowiReportReady = false;
   var PAGE_SIZE = 50;
 
   var els = {
-    form: document.getElementById('calcForm'),
+    form: document.getElementById('loanForm'),
     loanAmount: document.getElementById('loanAmount'),
     interestRate: document.getElementById('interestRate'),
     termYears: document.getElementById('termYears'),
-    calculate: document.getElementById('calculate'),
-    inputsError: document.getElementById('inputsError'),
+    calculateBtn: document.getElementById('calculateBtn'),
     monthlyPayment: document.getElementById('monthlyPayment'),
     totalInterest: document.getElementById('totalInterest'),
     totalPaid: document.getElementById('totalPaid'),
-    statusChip: document.getElementById('statusChip'),
     amortBody: document.getElementById('amortBody'),
-    amortPrev: document.getElementById('amortPrev'),
-    amortNext: document.getElementById('amortNext'),
-    amortPage: document.getElementById('amortPage'),
+    tableEmpty: document.getElementById('tableEmpty'),
+    pageInfo: document.getElementById('pageInfo'),
+    prevPage: document.getElementById('prevPage'),
+    nextPage: document.getElementById('nextPage'),
     chart: document.getElementById('balanceChart'),
-    navCalcPill: document.getElementById('navCalcPill'),
-    navSchedulePill: document.getElementById('navSchedulePill'),
-    navChartPill: document.getElementById('navChartPill'),
-    viewerName: document.getElementById('viewerName')
+    chartEmpty: document.getElementById('chartEmpty'),
+    pillCalc: document.querySelector('[data-pill="calculator"]'),
+    pillAmort: document.querySelector('[data-pill="amortization"]'),
+    pillBalance: document.querySelector('[data-pill="balance"]')
   };
 
-  var state = {
-    schedule: [],
-    payment: 0,
-    totalInterest: 0,
-    totalPaid: 0,
-    principal: 0,
-    n: 0,
-    page: 1
-  };
+  var schedule = [];
+  var currentPage = 1;
+  var lastValid = { amount: 250000, rate: 6.5, years: 30 };
 
-  function fmtMoney(v) {
-    return '$' + Number(v).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  function fmtMoney(n) {
+    if (!isFinite(n)) return '$0.00';
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  function fmtAxis(v) {
-    if (v >= 1000) {
-      var k = v / 1000;
+  function fmtAxis(n) {
+    if (n >= 1000) {
+      var k = n / 1000;
       return '$' + (k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)) + 'k';
     }
-    return '$' + Math.round(v);
+    return '$' + Math.round(n);
   }
 
-  function setChip(text, kind) {
-    els.statusChip.textContent = text;
-    els.statusChip.className = 'chip chip-' + kind;
+  function fmtYear(y) {
+    return y % 1 === 0 ? String(y) : y.toFixed(1);
   }
 
-  function showError(msg) {
-    if (msg) {
-      els.inputsError.textContent = msg;
-      els.inputsError.hidden = false;
-    } else {
-      els.inputsError.textContent = '';
-      els.inputsError.hidden = true;
-    }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  function buildSchedule(principal, annualRate, years) {
-    var r = annualRate / 1200;
+  function buildSchedule(amount, rate, years) {
+    var r = rate / 100 / 12;
     var n = Math.round(years * 12);
     var payment;
     if (r === 0) {
-      payment = principal / n;
+      payment = amount / n;
     } else {
-      var factor = Math.pow(1 + r, n);
-      payment = (principal * r * factor) / (factor - 1);
+      var f = Math.pow(1 + r, n);
+      payment = (amount * r * f) / (f - 1);
     }
-
     var rows = [];
-    var balance = principal;
-    var totalInterest = 0;
+    var bal = amount;
     for (var m = 1; m <= n; m++) {
-      var interest = balance * r;
-      var principalPart = payment - interest;
-      balance -= principalPart;
-      if (balance < 0) balance = 0;
-      totalInterest += interest;
+      var interest = bal * r;
+      var principal = payment - interest;
+      if (m === n) {
+        principal = bal;
+      }
+      bal = bal - principal;
+      if (bal < 0) bal = 0;
       rows.push({
         month: m,
         payment: payment,
-        principal: principalPart,
+        principal: principal,
         interest: interest,
-        balance: balance
+        balance: bal
       });
     }
-    return { rows: rows, payment: payment, totalInterest: totalInterest, n: n };
+    return { payment: payment, rows: rows };
   }
 
   function renderTable() {
-    var rows = state.schedule;
-    var total = rows.length;
-    var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    if (state.page > pages) state.page = pages;
-    if (state.page < 1) state.page = 1;
+    var total = schedule.length;
+    var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+    if (currentPage < 1) currentPage = 1;
 
-    var start = (state.page - 1) * PAGE_SIZE;
+    var start = (currentPage - 1) * PAGE_SIZE;
     var end = Math.min(start + PAGE_SIZE, total);
-    var frag = document.createDocumentFragment();
-
+    var html = '';
     for (var i = start; i < end; i++) {
-      var row = rows[i];
-      var tr = document.createElement('tr');
-
-      var cMonth = document.createElement('td');
-      cMonth.className = 'num';
-      cMonth.textContent = row.month;
-
-      var cPay = document.createElement('td');
-      cPay.className = 'num';
-      cPay.textContent = fmtMoney(row.payment);
-
-      var cPrin = document.createElement('td');
-      cPrin.className = 'num';
-      cPrin.textContent = fmtMoney(row.principal);
-
-      var cInt = document.createElement('td');
-      cInt.className = 'num';
-      cInt.textContent = fmtMoney(row.interest);
-
-      var cBal = document.createElement('td');
-      cBal.className = 'num';
-      cBal.textContent = fmtMoney(row.balance);
-
-      tr.appendChild(cMonth);
-      tr.appendChild(cPay);
-      tr.appendChild(cPrin);
-      tr.appendChild(cInt);
-      tr.appendChild(cBal);
-      frag.appendChild(tr);
+      var row = schedule[i];
+      html +=
+        '<tr>' +
+        '<td class="col-num">' + row.month + '</td>' +
+        '<td class="col-num">' + fmtMoney(row.payment) + '</td>' +
+        '<td class="col-num">' + fmtMoney(row.principal) + '</td>' +
+        '<td class="col-num">' + fmtMoney(row.interest) + '</td>' +
+        '<td class="col-num">' + fmtMoney(row.balance) + '</td>' +
+        '</tr>';
     }
+    els.amortBody.innerHTML = html;
 
-    els.amortBody.innerHTML = '';
-    els.amortBody.appendChild(frag);
-
-    els.amortPage.textContent = 'Page ' + state.page + ' of ' + pages;
-    els.amortPrev.disabled = state.page <= 1;
-    els.amortNext.disabled = state.page >= pages;
+    els.pageInfo.textContent = 'Page ' + currentPage + ' of ' + totalPages;
+    els.prevPage.disabled = currentPage <= 1;
+    els.nextPage.disabled = currentPage >= totalPages;
   }
 
   function renderChart() {
     var svg = els.chart;
-    while (svg.firstChild) svg.removeChild(svg.firstChild);
-
     var W = 720, H = 340;
     var padL = 64, padR = 20, padT = 20, padB = 44;
     var plotW = W - padL - padR;
     var plotH = H - padT - padB;
-    var baseY = padT + plotH;
-
-    var rows = state.schedule;
-    var n = state.n;
-    var maxBal = state.principal;
+    var n = schedule.length;
+    var maxBal = lastValid.amount;
     if (maxBal <= 0) maxBal = 1;
 
-    function xFor(m) {
-      if (n <= 1) return padL;
-      return padL + (m / n) * plotW;
-    }
-    function yFor(b) {
-      return padT + (1 - b / maxBal) * plotH;
-    }
+    var parts = [];
+    parts.push('<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#FFFFFF"></rect>');
 
-    var NS = 'http://www.w3.org/2000/svg';
-    function el(tag, attrs) {
-      var e = document.createElementNS(NS, tag);
-      for (var k in attrs) {
-        if (Object.prototype.hasOwnProperty.call(attrs, k)) e.setAttribute(k, attrs[k]);
-      }
-      return e;
+    var gridLines = 4;
+    for (var g = 0; g <= gridLines; g++) {
+      var gy = padT + (plotH * g) / gridLines;
+      var val = maxBal * (1 - g / gridLines);
+      parts.push('<line x1="' + padL + '" y1="' + gy + '" x2="' + (W - padR) + '" y2="' + gy + '" stroke="#EAEFEF" stroke-width="1"></line>');
+      parts.push('<text x="' + (padL - 8) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="11" fill="#56666D">' + esc(fmtAxis(val)) + '</text>');
     }
-
-    var grid = el('g', { 'class': 'chart-grid' });
-    var yTicks = 5;
-    for (var t = 0; t <= yTicks; t++) {
-      var val = (maxBal / yTicks) * t;
-      var y = yFor(val);
-      grid.appendChild(el('line', {
-        x1: padL, y1: y, x2: W - padR, y2: y,
-        stroke: '#E8EDEE', 'stroke-width': '1'
-      }));
-      var yl = el('text', {
-        x: padL - 10, y: y + 4, 'text-anchor': 'end',
-        'font-size': '11', fill: '#56666D'
-      });
-      yl.textContent = fmtAxis(val);
-      grid.appendChild(yl);
-    }
-    svg.appendChild(grid);
 
     var xTicks = 6;
-    var xg = el('g', { 'class': 'chart-xlabels' });
-    for (var xt = 0; xt <= xTicks; xt++) {
-      var mVal = Math.round((n / xTicks) * xt);
-      var x = xFor(mVal);
-      var xl = el('text', {
-        x: x, y: baseY + 20, 'text-anchor': 'middle',
-        'font-size': '11', fill: '#56666D'
-      });
-      xl.textContent = mVal;
-      xg.appendChild(xl);
+    for (var t = 0; t <= xTicks; t++) {
+      var frac = t / xTicks;
+      var x = padL + plotW * frac;
+      var year = (n / 12) * frac;
+      parts.push('<line x1="' + x + '" y1="' + (H - padB) + '" x2="' + x + '" y2="' + (H - padB + 5) + '" stroke="#DCE3E4" stroke-width="1"></line>');
+      parts.push('<text x="' + x + '" y="' + (H - padB + 20) + '" text-anchor="middle" font-size="11" fill="#56666D">' + esc(fmtYear(year)) + '</text>');
     }
-    svg.appendChild(xg);
 
-    var axes = el('g', { 'class': 'chart-axes' });
-    axes.appendChild(el('line', {
-      x1: padL, y1: padT, x2: padL, y2: baseY,
-      stroke: '#DCE3E4', 'stroke-width': '1'
-    }));
-    axes.appendChild(el('line', {
-      x1: padL, y1: baseY, x2: W - padR, y2: baseY,
-      stroke: '#DCE3E4', 'stroke-width': '1'
-    }));
-    svg.appendChild(axes);
+    parts.push('<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#DCE3E4" stroke-width="1"></line>');
+    parts.push('<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#DCE3E4" stroke-width="1"></line>');
 
-    var areaPts = 'M ' + xFor(0).toFixed(2) + ' ' + yFor(maxBal).toFixed(2) + ' ';
-    var linePts = '';
-    for (var i = 0; i < rows.length; i++) {
-      var px = xFor(rows[i].month).toFixed(2);
-      var py = yFor(rows[i].balance).toFixed(2);
-      linePts += (i === 0 ? 'M ' : 'L ') + px + ' ' + py + ' ';
-      areaPts += 'L ' + px + ' ' + py + ' ';
+    var pts = [];
+    for (var i = 0; i < n; i++) {
+      var px = padL + (plotW * i) / (n - 1);
+      var py = padT + plotH * (1 - schedule[i].balance / maxBal);
+      pts.push(px.toFixed(1) + ',' + py.toFixed(1));
     }
-    areaPts += 'L ' + xFor(n).toFixed(2) + ' ' + baseY.toFixed(2) + ' L ' + xFor(0).toFixed(2) + ' ' + baseY.toFixed(2) + ' Z';
+    var line = 'M' + pts.join(' L');
+    var area = 'M' + padL + ',' + (H - padB) + ' L' + pts.join(' L') + ' L' + (W - padR) + ',' + (H - padB) + ' Z';
+    parts.push('<path d="' + area + '" fill="#4E6E78" fill-opacity="0.10"></path>');
+    parts.push('<path d="' + line + '" fill="none" stroke="#4E6E78" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></path>');
 
-    svg.appendChild(el('path', {
-      d: areaPts, fill: '#4E6E78', 'fill-opacity': '0.12', stroke: 'none'
-    }));
-    svg.appendChild(el('path', {
-      d: linePts, fill: 'none', stroke: '#4E6E78', 'stroke-width': '2',
-      'stroke-linejoin': 'round', 'stroke-linecap': 'round'
-    }));
+    var last = schedule[n - 1];
+    var ex = padL + plotW;
+    var ey = padT + plotH * (1 - last.balance / maxBal);
+    parts.push('<circle cx="' + ex + '" cy="' + ey.toFixed(1) + '" r="3.5" fill="#4E6E78"></circle>');
 
-    var xTitle = el('text', {
-      x: padL + plotW / 2, y: H - 8, 'text-anchor': 'middle',
-      'font-size': '12', fill: '#56666D'
-    });
-    xTitle.textContent = 'Month';
-    svg.appendChild(xTitle);
-
-    var yTitle = el('text', {
-      x: 16, y: padT + plotH / 2, 'text-anchor': 'middle',
-      'font-size': '12', fill: '#56666D',
-      transform: 'rotate(-90 16 ' + (padT + plotH / 2) + ')'
-    });
-    yTitle.textContent = 'Remaining balance';
-    svg.appendChild(yTitle);
-  }
-
-  function renderResults() {
-    els.monthlyPayment.textContent = fmtMoney(state.payment);
-    els.totalInterest.textContent = fmtMoney(state.totalInterest);
-    els.totalPaid.textContent = fmtMoney(state.totalPaid);
+    svg.innerHTML = parts.join('');
   }
 
   function updatePills() {
-    var n = state.n;
-    els.navCalcPill.textContent = n > 0 ? '1' : '0';
-    els.navSchedulePill.textContent = n > 0 ? String(n) : '0';
-    els.navChartPill.textContent = n > 0 ? String(n) : '0';
+    if (els.pillCalc) els.pillCalc.textContent = '3';
+    if (els.pillAmort) els.pillAmort.textContent = schedule.length;
+    if (els.pillBalance) els.pillBalance.textContent = schedule.length;
   }
 
   function calculate() {
@@ -276,50 +172,47 @@ window.knowiReportReady = false;
     var rate = parseFloat(els.interestRate.value);
     var years = parseFloat(els.termYears.value);
 
-    if (isNaN(amount) || amount <= 0) {
-      showError('Enter a loan amount greater than zero.');
+    if (!isFinite(amount) || amount <= 0 || !isFinite(rate) || rate < 0 || !isFinite(years) || years <= 0) {
+      els.tableEmpty.hidden = false;
+      els.chartEmpty.hidden = false;
+      els.chart.innerHTML = '';
+      els.amortBody.innerHTML = '';
+      els.monthlyPayment.textContent = '$0.00';
+      els.totalInterest.textContent = '$0.00';
+      els.totalPaid.textContent = '$0.00';
+      schedule = [];
+      updatePills();
+      window.knowiReportReady = true;
       return;
     }
-    if (isNaN(rate) || rate < 0 || rate > 100) {
-      showError('Enter an annual interest rate between 0 and 100.');
-      return;
-    }
-    if (isNaN(years) || years < 1 || years > 50) {
-      showError('Enter a term between 1 and 50 years.');
-      return;
-    }
-    showError('');
 
-    var res = buildSchedule(amount, rate, years);
-    state.schedule = res.rows;
-    state.payment = res.payment;
-    state.totalInterest = res.totalInterest;
-    state.totalPaid = res.payment * res.n;
-    state.principal = amount;
-    state.n = res.n;
-    state.page = 1;
+    lastValid = { amount: amount, rate: rate, years: years };
+    var result = buildSchedule(amount, rate, years);
+    schedule = result.rows;
+    currentPage = 1;
 
-    renderResults();
+    var totalPaid = result.payment * schedule.length;
+    var totalInterest = totalPaid - amount;
+
+    els.monthlyPayment.textContent = fmtMoney(result.payment);
+    els.totalInterest.textContent = fmtMoney(totalInterest);
+    els.totalPaid.textContent = fmtMoney(totalPaid);
+
+    els.tableEmpty.hidden = true;
+    els.chartEmpty.hidden = true;
     renderTable();
     renderChart();
     updatePills();
-    setChip('Calculated', 'ok');
+    window.knowiReportReady = true;
   }
 
-  function loadViewer() {
-    fetch('api/viewer', { method: 'GET', headers: { 'Accept': 'application/json' } })
-      .then(function (r) {
-        if (!r.ok) throw new Error('no viewer');
-        return r.json();
-      })
-      .then(function (data) {
-        if (data && data.name) {
-          els.viewerName.textContent = data.name;
-        }
-      })
-      .catch(function () {
-        els.viewerName.textContent = 'Guest';
-      });
+  function onInput() {
+    var amount = parseFloat(els.loanAmount.value);
+    var rate = parseFloat(els.interestRate.value);
+    var years = parseFloat(els.termYears.value);
+    if (isFinite(amount) && amount > 0 && isFinite(rate) && rate >= 0 && isFinite(years) && years > 0) {
+      calculate();
+    }
   }
 
   els.form.addEventListener('submit', function (e) {
@@ -327,22 +220,24 @@ window.knowiReportReady = false;
     calculate();
   });
 
-  els.amortPrev.addEventListener('click', function () {
-    if (state.page > 1) {
-      state.page -= 1;
+  [els.loanAmount, els.interestRate, els.termYears].forEach(function (el) {
+    el.addEventListener('input', onInput);
+  });
+
+  els.prevPage.addEventListener('click', function () {
+    if (currentPage > 1) {
+      currentPage--;
       renderTable();
     }
   });
 
-  els.amortNext.addEventListener('click', function () {
-    var pages = Math.max(1, Math.ceil(state.schedule.length / PAGE_SIZE));
-    if (state.page < pages) {
-      state.page += 1;
+  els.nextPage.addEventListener('click', function () {
+    var totalPages = Math.max(1, Math.ceil(schedule.length / PAGE_SIZE));
+    if (currentPage < totalPages) {
+      currentPage++;
       renderTable();
     }
   });
 
-  loadViewer();
-  updatePills();
-  window.knowiReportReady = true;
+  calculate();
 })();

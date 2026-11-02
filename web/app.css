@@ -22,7 +22,11 @@ body {
 
 h1, h2, h3 {
   margin: 0;
-  font-weight: 400;
+}
+
+a {
+  color: #4E6E78;
+  text-decoration: none;
 }
 
 button {
@@ -38,8 +42,8 @@ button {
 
 /* ===== Sidebar ===== */
 .sidebar {
-  width: 236px;
   flex: 0 0 236px;
+  width: 236px;
   background: #FFFFFF;
   border-right: 1px solid #DCE3E4;
   display: flex;
@@ -61,14 +65,24 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: #EAEFEF;
   color: #375357;
+  flex: 0 0 auto;
+}
+
+.brand-mark svg {
+  display: block;
 }
 
 .brand-name {
   font-family: Charter, 'Iowan Old Style', Georgia, serif;
+  font-weight: 400;
   font-size: 19px;
   color: #273D44;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
 }
 
 .nav {
@@ -85,7 +99,6 @@ button {
   padding: 9px 10px;
   border-radius: 9px;
   color: #273D44;
-  text-decoration: none;
   font-size: 15px;
   transition: background-color 120ms ease;
 }
@@ -94,8 +107,9 @@ button {
   background: #F3F5F5;
 }
 
-.nav-link[aria-current="page"] {
-  background: #EAEFEF;
+.nav-link:focus-visible {
+  outline: 2px solid #4E6E78;
+  outline-offset: 2px;
 }
 
 .nav-icon {
@@ -104,6 +118,10 @@ button {
   justify-content: center;
   color: #4E6E78;
   flex: 0 0 auto;
+}
+
+.nav-icon svg {
+  display: block;
 }
 
 .nav-label {
@@ -119,8 +137,8 @@ button {
   background: #EAEFEF;
   color: #56666D;
   font-size: 12px;
-  text-align: center;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .viewer {
@@ -136,20 +154,21 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: #EAEFEF;
   color: #4E6E78;
   flex: 0 0 auto;
 }
 
+.viewer-avatar svg {
+  display: block;
+}
+
 .viewer-name {
   font-size: 14px;
   color: #273D44;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ===== Canvas / content ===== */
@@ -171,15 +190,18 @@ button {
 
 .page-title {
   font-family: Charter, 'Iowan Old Style', Georgia, serif;
+  font-weight: 400;
   font-size: 30px;
-  color: #273D44;
   line-height: 1.2;
+  color: #273D44;
+  letter-spacing: -0.01em;
 }
 
 .page-sub {
   margin: 8px 0 0;
-  color: #56666D;
   max-width: 62ch;
+  color: #56666D;
+  font-size: 15px;
 }
 
 /* ===== Cards ===== */
@@ -187,35 +209,38 @@ button {
   background: #FFFFFF;
   border: 1px solid #E8EDEE;
   border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(30, 47, 53, 0.04), 0 2px 8px rgba(30, 47, 53, 0.04);
+  box-shadow: 0 1px 2px rgba(30, 47, 53, 0.04), 0 4px 12px rgba(30, 47, 53, 0.04);
+  padding: 22px 24px;
   margin-bottom: 20px;
-}
-
-.card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 16px 20px;
-  border-bottom: 1px solid #E8EDEE;
 }
 
 .card-title {
   font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-size: 20px;
+  font-weight: 400;
+  font-size: 21px;
   color: #273D44;
+  letter-spacing: -0.01em;
 }
 
-.card-body {
-  padding: 20px;
+.card-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
 }
 
-/* ===== Form / fields ===== */
-.field-grid {
+.card-head-row .card-title {
+  margin: 0;
+}
+
+/* ===== Inputs ===== */
+.inputs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 18px 20px;
+  margin-top: 18px;
 }
 
 .field {
@@ -245,8 +270,10 @@ button {
   border-radius: 9px;
   background: #FFFFFF;
   color: #1E2F35;
+  font-family: inherit;
   font-size: 15px;
   font-variant-numeric: tabular-nums;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .input-wrap .input-prefix {
@@ -254,6 +281,7 @@ button {
   left: 12px;
   color: #56666D;
   pointer-events: none;
+  font-size: 15px;
 }
 
 .input-wrap .input-suffix {
@@ -261,11 +289,11 @@ button {
   right: 12px;
   color: #56666D;
   pointer-events: none;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .input-wrap:has(.input-prefix) .input {
-  padding-left: 26px;
+  padding-left: 28px;
 }
 
 .input-wrap:has(.input-suffix) .input {
@@ -278,37 +306,30 @@ button {
   box-shadow: 0 0 0 3px rgba(78, 110, 120, 0.18);
 }
 
-.form-actions {
-  margin-top: 20px;
+.input::placeholder {
+  color: #56666D;
+}
+
+.field-actions {
+  grid-column: 1 / -1;
   display: flex;
-  gap: 12px;
-}
-
-.inputs-error {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border-radius: 9px;
-  background: #F5E3E5;
-  color: #9C2F3C;
-  font-size: 14px;
-}
-
-.inputs-error[hidden] {
-  display: none;
+  justify-content: flex-start;
+  margin-top: 4px;
 }
 
 /* ===== Buttons ===== */
 .btn {
-  height: 38px;
-  padding: 0 16px;
-  border-radius: 9px;
-  border: 1px solid transparent;
-  font-size: 15px;
-  cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
 
@@ -324,132 +345,143 @@ button {
 
 .btn-primary:hover {
   background: #273D44;
-}
-
-.btn-primary:disabled {
-  background: #DCE3E4;
-  color: #56666D;
-  cursor: not-allowed;
+  color: #FFFFFF;
 }
 
 .btn-ghost {
   background: #FFFFFF;
   color: #273D44;
   border-color: #DCE3E4;
+  height: 34px;
+  padding: 0 14px;
+  font-size: 14px;
 }
 
-.btn-ghost:hover:not(:disabled) {
+.btn-ghost:hover {
   background: #F3F5F5;
 }
 
 .btn-ghost:disabled {
-  color: #9AA6AB;
-  cursor: not-allowed;
-}
-
-/* ===== Chips ===== */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 11px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.chip-muted {
-  background: #EAEFEF;
   color: #56666D;
-}
-
-.chip-done {
-  background: #E4F0EC;
-  color: #276B5D;
-}
-
-.chip-waiting {
-  background: #F1ECE6;
-  color: #5F4C38;
-}
-
-.chip-risk {
-  background: #F5E3E5;
-  color: #9C2F3C;
+  background: #FFFFFF;
+  cursor: not-allowed;
+  opacity: 0.7;
 }
 
 /* ===== Results ===== */
 .results-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+  margin-top: 18px;
+  align-items: center;
 }
 
-.result {
+.result-main {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 16px;
-  background: #F3F5F5;
-  border-radius: 10px;
 }
 
 .result-label {
   font-size: 13px;
+  font-weight: 600;
   color: #56666D;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .result-value {
   font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-size: 30px;
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.1;
   color: #273D44;
-  line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
-/* ===== Pager ===== */
-.pager {
+.result-side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-left: 24px;
+  border-left: 1px solid #E8EDEE;
+}
+
+.result-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.result-row .result-label {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
+  color: #273D44;
+  font-size: 14px;
+}
+
+.result-num {
+  font-size: 18px;
+  font-weight: 600;
+  color: #273D44;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== Table ===== */
+.table-pager {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.pager-label {
+.page-info {
   font-size: 13px;
   color: #56666D;
   font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+  min-width: 92px;
+  text-align: center;
 }
 
-/* ===== Table ===== */
 .table-scroll {
   overflow-x: auto;
-  border-radius: 10px;
   border: 1px solid #E8EDEE;
+  border-radius: 10px;
 }
 
 .ledger {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  min-width: 560px;
+  font-variant-numeric: tabular-nums;
 }
 
 .ledger thead th {
   background: #EAEFEF;
   color: #273D44;
   font-weight: 600;
-  text-align: left;
+  text-align: right;
   padding: 11px 14px;
   border-bottom: 1px solid #DCE3E4;
   white-space: nowrap;
 }
 
+.ledger thead th.col-num {
+  text-align: right;
+}
+
 .ledger tbody td {
   padding: 9px 14px;
-  border-bottom: 1px solid #E8EDEE;
+  text-align: right;
   color: #1E2F35;
-  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid #E8EDEE;
+  white-space: nowrap;
+}
+
+.ledger tbody td.col-num {
+  text-align: right;
 }
 
 .ledger tbody tr:last-child td {
@@ -457,47 +489,49 @@ button {
 }
 
 .ledger tbody tr:nth-child(even) td {
-  background: #FAFBFB;
+  background: #F9FBFB;
 }
 
-.ledger .num {
-  text-align: right;
+.ledger tbody tr:hover td {
+  background: #F3F5F5;
 }
 
-.empty-row td {
-  text-align: center;
+.table-empty,
+.chart-empty {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px dashed #DCE3E4;
+  border-radius: 10px;
+  background: #F3F5F5;
   color: #56666D;
-  padding: 28px 14px;
-  background: #FFFFFF;
+  font-size: 14px;
+  text-align: center;
 }
 
 /* ===== Chart ===== */
 .chart-wrap {
+  margin-top: 18px;
   width: 100%;
 }
 
-.balance-chart {
+.chart {
+  display: block;
   width: 100%;
   height: auto;
-  display: block;
+  max-width: 100%;
 }
 
-.chart-empty {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  fill: #56666D;
+.chart .chart-grid {
+  stroke: #E8EDEE;
+  stroke-width: 1;
 }
 
-.chart-axis-line {
+.chart .chart-axis {
   stroke: #DCE3E4;
   stroke-width: 1;
 }
 
-.chart-grid-line {
-  stroke: #EAEFEF;
-  stroke-width: 1;
-}
-
-.chart-line {
+.chart .chart-line {
   fill: none;
   stroke: #4E6E78;
   stroke-width: 2;
@@ -505,22 +539,27 @@ button {
   stroke-linecap: round;
 }
 
-.chart-area {
-  fill: #4E6E78;
-  fill-opacity: 0.08;
+.chart .chart-area {
+  fill: rgba(78, 110, 120, 0.10);
   stroke: none;
 }
 
-.chart-axis-label {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  font-size: 12px;
-  fill: #56666D;
+.chart .chart-dot {
+  fill: #375357;
+  stroke: #FFFFFF;
+  stroke-width: 1.5;
 }
 
-.chart-title-label {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-size: 13px;
+.chart .chart-label {
+  fill: #56666D;
+  font-size: 11px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+.chart .chart-title {
   fill: #273D44;
+  font-size: 12px;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* ===== Responsive ===== */
@@ -530,8 +569,8 @@ button {
   }
 
   .sidebar {
-    width: 100%;
     flex: 0 0 auto;
+    width: 100%;
     height: auto;
     position: static;
     border-right: none;
@@ -547,8 +586,8 @@ button {
     flex-direction: row;
     overflow-x: auto;
     margin-top: 0;
-    margin-bottom: 12px;
     gap: 6px;
+    padding-bottom: 4px;
   }
 
   .nav-link {
@@ -556,31 +595,58 @@ button {
     padding: 8px 12px;
   }
 
-  .nav-label {
-    white-space: nowrap;
+  .nav-pill {
+    display: none;
   }
 
   .viewer {
-    margin-top: 0;
+    margin-top: 12px;
     border-top: none;
-    padding: 0;
+    padding: 8px 0 0;
   }
 
   .content {
     padding: 20px 16px 48px;
   }
 
-  .field-grid {
+  .page-title {
+    font-size: 24px;
+  }
+
+  .page-sub {
+    font-size: 14px;
+  }
+
+  .inputs {
     grid-template-columns: 1fr;
+    gap: 16px;
   }
 
   .results-grid {
     grid-template-columns: 1fr;
+    gap: 18px;
   }
 
-  .card-head {
+  .result-side {
+    padding-left: 0;
+    border-left: none;
+    padding-top: 14px;
+    border-top: 1px solid #E8EDEE;
+  }
+
+  .result-value {
+    font-size: 36px;
+  }
+
+  .card-head-row {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+  }
+
+  .table-pager {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 
@@ -589,8 +655,8 @@ button {
   .sidebar,
   .nav,
   .viewer,
-  .form-actions,
-  .pager,
+  .table-pager,
+  .field-actions,
   .btn {
     display: none !important;
   }
@@ -612,6 +678,25 @@ button {
     box-shadow: none;
     border: 1px solid #DCE3E4;
     break-inside: avoid;
+  }
+
+  .table-scroll {
+    overflow-x: visible;
+    border: none;
+  }
+}
+
+/* ===== Focus / a11y ===== */
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid #4E6E78;
+  outline-offset: 2px;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
   }
 }
 
