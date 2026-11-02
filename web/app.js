@@ -3,492 +3,183 @@ window.knowiReportReady = false;
 (function () {
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // Element references
-  // ---------------------------------------------------------------------------
-  const $ = (id) => document.getElementById(id);
+  var items = [
+    { id: 1, name: 'A4 Copy Paper', supplier: 'Bright Paper Co.', qty: 120, reorder: 40, unitCost: 4.25 },
+    { id: 2, name: 'Ballpoint Pens (Blue)', supplier: 'Inkwell Supply', qty: 8, reorder: 25, unitCost: 0.85 },
+    { id: 3, name: 'Sticky Notes 3x3', supplier: 'Inkwell Supply', qty: 64, reorder: 30, unitCost: 2.10 },
+    { id: 4, name: 'Toner Cartridge 26X', supplier: 'Bright Paper Co.', qty: 3, reorder: 6, unitCost: 89.00 },
+    { id: 5, name: 'USB-C Cable 2m', supplier: 'Circuit Works', qty: 45, reorder: 20, unitCost: 11.50 },
+    { id: 6, name: 'Wireless Mouse', supplier: 'Circuit Works', qty: 12, reorder: 10, unitCost: 24.99 },
+    { id: 7, name: 'Ergonomic Chair', supplier: 'Forma Office', qty: 5, reorder: 4, unitCost: 320.00 },
+    { id: 8, name: 'Standing Desk Mat', supplier: 'Forma Office', qty: 18, reorder: 8, unitCost: 34.00 },
+    { id: 9, name: 'Whiteboard Markers', supplier: 'Inkwell Supply', qty: 2, reorder: 12, unitCost: 1.40 },
+    { id: 10, name: 'HDMI Adapter', supplier: 'Circuit Works', qty: 30, reorder: 15, unitCost: 18.75 },
+    { id: 11, name: 'Desk Lamp LED', supplier: 'Forma Office', qty: 9, reorder: 6, unitCost: 42.00 },
+    { id: 12, name: 'Cable Ties (100pk)', supplier: 'Circuit Works', qty: 55, reorder: 20, unitCost: 6.30 },
+    { id: 13, name: 'Letter Envelopes', supplier: 'Bright Paper Co.', qty: 200, reorder: 100, unitCost: 0.12 },
+    { id: 14, name: 'Monitor Stand', supplier: 'Forma Office', qty: 7, reorder: 5, unitCost: 55.00 }
+  ];
 
-  const taskCountEl = $('task-count');
-  const viewerNameEl = $('viewer-name');
+  var searchInput = document.getElementById('searchInput');
+  var filterSelect = document.getElementById('filterSelect');
+  var totalValue = document.getElementById('totalValue');
+  var tableBody = document.getElementById('tableBody');
+  var tableEmpty = document.getElementById('tableEmpty');
+  var navCount = document.getElementById('navCount');
+  var supplierCount = document.getElementById('supplierCount');
 
-  const addForm = $('add-form');
-  const newTitle = $('new-title');
-  const newOwner = $('new-owner');
-  const newStatus = $('new-status');
-  const newDue = $('new-due');
-  const addSubmit = $('add-submit');
-
-  const statusFilter = $('status-filter');
-  const overdueFilter = $('overdue-filter');
-  const taskList = $('task-list');
-  const loadingEl = $('loading');
-  const errorState = $('error-state');
-  const errorMessage = $('error-message');
-  const emptyState = $('empty-state');
-  const retryBtn = $('retry-btn');
-
-  const modalBackdrop = $('modal-backdrop');
-  const editForm = $('edit-form');
-  const editTitle = $('edit-title');
-  const editOwner = $('edit-owner');
-  const editStatus = $('edit-status');
-  const editDue = $('edit-due');
-  const modalSave = $('modal-save');
-  const modalCancel = $('modal-cancel');
-  const modalDelete = $('modal-delete');
-
-  const toastEl = $('toast');
-
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
-  let tasks = [];
-  let editingId = null;
-  let toastTimer = null;
-  let lastFocused = null;
-  let overdueActive = false;
-
-  const STATUSES = ['To do', 'In progress', 'Done'];
-
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-  function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  function fmt(n) {
+    return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  function formatDate(value) {
-    if (!value) return '';
-    const d = new Date(value);
-    if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  }
-
-  function statusClass(status) {
-    if (status === 'Done') return 'pill-done';
-    if (status === 'In progress') return 'pill-progress';
-    return 'pill-todo';
-  }
-
-  function isOverdue(task) {
-    if (!task.due_date) return false;
-    if (task.status === 'Done') return false;
-    const due = new Date(task.due_date);
-    if (isNaN(due.getTime())) return false;
-    return due.getTime() < Date.now();
-  }
-
-  function showToast(message, kind) {
-    if (toastTimer) clearTimeout(toastTimer);
-    toastEl.textContent = message;
-    toastEl.className = 'toast ' + (kind === 'error' ? 'toast-error' : 'toast-success');
-    toastEl.hidden = false;
-    toastTimer = setTimeout(() => {
-      toastEl.hidden = true;
-      toastEl.className = 'toast';
-    }, 3200);
-  }
-
-  function setLoading(on) {
-    loadingEl.hidden = !on;
-    if (on) {
-      errorState.hidden = true;
-      emptyState.hidden = true;
-    }
-  }
-
-  function showError(message) {
-    loadingEl.hidden = true;
-    emptyState.hidden = true;
-    taskList.innerHTML = '';
-    errorMessage.textContent = message || "We couldn't load your tasks. Please try again.";
-    errorState.hidden = false;
-  }
-
-  function showEmpty() {
-    loadingEl.hidden = true;
-    errorState.hidden = true;
-    emptyState.hidden = false;
-    taskList.innerHTML = '';
-  }
-
-  // ---------------------------------------------------------------------------
-  // Rendering
-  // ---------------------------------------------------------------------------
-  function renderFilterOptions() {
-    const current = statusFilter.value;
-    const present = new Set(tasks.map((t) => t.status));
-    const options = ['All'].concat(STATUSES.filter((s) => present.has(s)));
-    statusFilter.innerHTML = '';
-    options.forEach((opt) => {
-      const o = document.createElement('option');
-      o.value = opt;
-      o.textContent = opt;
-      statusFilter.appendChild(o);
-    });
-    if (options.includes(current)) {
-      statusFilter.value = current;
-    } else {
-      statusFilter.value = 'All';
-    }
-  }
-
-  function renderList() {
-    const filter = statusFilter.value;
-    const visible =
-      filter === 'All' ? tasks : tasks.filter((t) => t.status === filter);
-
-    if (visible.length === 0) {
-      taskList.innerHTML = '';
-      if (tasks.length === 0) {
-        emptyState.hidden = false;
-      } else {
-        emptyState.hidden = true;
-        taskList.innerHTML =
-          '<div class="no-results"><p>No tasks match this filter.</p></div>';
+  function buildFilter() {
+    var suppliers = [];
+    var seen = {};
+    items.forEach(function (it) {
+      if (!seen[it.supplier]) {
+        seen[it.supplier] = true;
+        suppliers.push(it.supplier);
       }
-      return;
-    }
-
-    emptyState.hidden = true;
-    const rows = visible
-      .map((t) => {
-        const created = formatDate(t.created_at);
-        const due = t.due_date ? formatDate(t.due_date) : '';
-        const overdue = isOverdue(t);
-        const dueClass = 'task-due' + (overdue ? ' task-due-overdue' : '');
-        const dueLabel = due ? (overdue ? 'Overdue: ' + due : 'Due: ' + due) : 'No due date';
-        return (
-          '<div class="task-row" role="listitem" data-id="' + t.id + '">' +
-          '<div class="task-main">' +
-          '<span class="task-title">' + escapeHtml(t.title) + '</span>' +
-          '<span class="task-owner">' +
-          (t.owner ? escapeHtml(t.owner) : '<span class="task-owner-empty">Unassigned</span>') +
-          '</span>' +
-          '</div>' +
-          '<span class="status-pill ' + statusClass(t.status) + '">' +
-          escapeHtml(t.status) +
-          '</span>' +
-          '<span class="' + dueClass + '" id="task-due-' + t.id + '">' + escapeHtml(dueLabel) + '</span>' +
-          '<span class="task-date">' + (created ? escapeHtml(created) : '—') + '</span>' +
-          '<div class="task-actions">' +
-          '<button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-id="' +
-          t.id +
-          '" aria-label="Edit task: ' +
-          escapeHtml(t.title) +
-          '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path><path d="M13.5 6.5l4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path></svg><span>Edit</span></button>' +
-          '<button class="btn btn-ghost btn-sm btn-danger-ghost" type="button" data-action="delete" data-id="' +
-          t.id +
-          '" aria-label="Delete task: ' +
-          escapeHtml(t.title) +
-          '"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 7h14M9 7V5h6v2M8 7l1 12h6l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>Delete</span></button>' +
-          '</div>' +
-          '</div>'
-        );
-      })
-      .join('');
-    taskList.innerHTML = rows;
-  }
-
-  function updateCount() {
-    taskCountEl.textContent = String(tasks.length);
+    });
+    suppliers.sort();
+    filterSelect.innerHTML = '';
+    var all = document.createElement('option');
+    all.value = '';
+    all.textContent = 'All suppliers';
+    filterSelect.appendChild(all);
+    suppliers.forEach(function (s) {
+      var o = document.createElement('option');
+      o.value = s;
+      o.textContent = s;
+      filterSelect.appendChild(o);
+    });
+    supplierCount.textContent = String(suppliers.length);
   }
 
   function render() {
-    renderFilterOptions();
-    renderList();
-    updateCount();
+    var q = (searchInput.value || '').trim().toLowerCase();
+    var sup = filterSelect.value;
+
+    var filtered = items.filter(function (it) {
+      var okName = !q || it.name.toLowerCase().indexOf(q) !== -1;
+      var okSup = !sup || it.supplier === sup;
+      return okName && okSup;
+    });
+
+    var total = 0;
+    filtered.forEach(function (it) {
+      total += it.qty * it.unitCost;
+    });
+    totalValue.textContent = fmt(total);
+
+    tableBody.innerHTML = '';
+    if (filtered.length === 0) {
+      tableEmpty.hidden = false;
+      return;
+    }
+    tableEmpty.hidden = true;
+
+    filtered.forEach(function (it) {
+      var low = it.qty <= it.reorder;
+      var tr = document.createElement('tr');
+      if (low) tr.className = 'row-low';
+
+      var tdItem = document.createElement('td');
+      tdItem.className = 'cell-item';
+      tdItem.textContent = it.name;
+
+      var tdSup = document.createElement('td');
+      tdSup.textContent = it.supplier;
+
+      var tdQty = document.createElement('td');
+      var qtyInput = document.createElement('input');
+      qtyInput.type = 'number';
+      qtyInput.className = 'qtyInput';
+      qtyInput.setAttribute('data-id', String(it.id));
+      qtyInput.value = String(it.qty);
+      qtyInput.min = '0';
+      qtyInput.step = '1';
+      qtyInput.setAttribute('aria-label', 'Quantity for ' + it.name);
+      tdQty.appendChild(qtyInput);
+
+      var tdReorder = document.createElement('td');
+      tdReorder.textContent = String(it.reorder);
+
+      var tdCost = document.createElement('td');
+      tdCost.textContent = fmt(it.unitCost);
+
+      var tdRestock = document.createElement('td');
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'restockBtn';
+      btn.setAttribute('data-id', String(it.id));
+      btn.textContent = 'Restock';
+      btn.setAttribute('aria-label', 'Restock ' + it.name);
+      tdRestock.appendChild(btn);
+
+      tr.appendChild(tdItem);
+      tr.appendChild(tdSup);
+      tr.appendChild(tdQty);
+      tr.appendChild(tdReorder);
+      tr.appendChild(tdCost);
+      tr.appendChild(tdRestock);
+      tableBody.appendChild(tr);
+    });
+  }
+
+  function updateTotal() {
+    var q = (searchInput.value || '').trim().toLowerCase();
+    var sup = filterSelect.value;
+    var total = 0;
+    items.forEach(function (it) {
+      var okName = !q || it.name.toLowerCase().indexOf(q) !== -1;
+      var okSup = !sup || it.supplier === sup;
+      if (okName && okSup) total += it.qty * it.unitCost;
+    });
+    totalValue.textContent = fmt(total);
+  }
+
+  function onQtyChange(e) {
+    var id = Number(e.target.getAttribute('data-id'));
+    var val = Number(e.target.value);
+    if (isNaN(val) || val < 0) val = 0;
+    var it = items.find(function (x) { return x.id === id; });
+    if (!it) return;
+    it.qty = val;
+    updateTotal();
+    var tr = e.target.closest('tr');
+    if (tr) {
+      if (val <= it.reorder) tr.classList.add('row-low');
+      else tr.classList.remove('row-low');
+    }
+  }
+
+  function onRestock(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var id = Number(btn.getAttribute('data-id'));
+    var it = items.find(function (x) { return x.id === id; });
+    if (!it) return;
+    it.qty = it.reorder * 2;
+    render();
+  }
+
+  function init() {
+    buildFilter();
+    navCount.textContent = String(items.length);
+    render();
+
+    searchInput.addEventListener('input', render);
+    filterSelect.addEventListener('change', render);
+    tableBody.addEventListener('input', onQtyChange);
+    tableBody.addEventListener('click', onRestock);
+
     window.knowiReportReady = true;
   }
 
-  // ---------------------------------------------------------------------------
-  // Data fetching
-  // ---------------------------------------------------------------------------
-  async function loadTasks() {
-    setLoading(true);
-    try {
-      const url = overdueActive ? 'api/tasks?filter=overdue' : 'api/tasks';
-      const res = await fetch(url, {
-        headers: { Accept: 'application/json' },
-      });
-      if (res.status === 401) {
-        window.location.href = 'login';
-        return;
-      }
-      if (!res.ok) {
-        let msg = "We couldn't load your tasks. Please try again.";
-        try {
-          const j = await res.json();
-          if (j && j.error) msg = j.error;
-        } catch (e) {}
-        showError(msg);
-        return;
-      }
-      const data = await res.json();
-      tasks = Array.isArray(data.tasks) ? data.tasks : [];
-      render();
-    } catch (err) {
-      showError('Network error. Please check your connection and try again.');
-    }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
   }
-
-  // ---------------------------------------------------------------------------
-  // Modal
-  // ---------------------------------------------------------------------------
-  function openModal(task) {
-    editingId = task.id;
-    editTitle.value = task.title || '';
-    editOwner.value = task.owner || '';
-    editStatus.value = STATUSES.includes(task.status) ? task.status : 'To do';
-    editDue.value = task.due_date ? task.due_date.slice(0, 10) : '';
-    lastFocused = document.activeElement;
-    modalBackdrop.hidden = false;
-    document.body.classList.add('modal-open');
-    editTitle.focus();
-  }
-
-  function closeModal() {
-    modalBackdrop.hidden = true;
-    document.body.classList.remove('modal-open');
-    editingId = null;
-    if (lastFocused && typeof lastFocused.focus === 'function') {
-      lastFocused.focus();
-    }
-  }
-
-  function trapFocus(e) {
-    if (modalBackdrop.hidden) return;
-    if (e.key !== 'Tab') return;
-    const focusables = modalBackdrop.querySelectorAll(
-      'button, input, select, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusables.length === 0) return;
-    const first = focusables[0];
-    const last = focusables[focusables.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Mutations
-  // ---------------------------------------------------------------------------
-  async function createTask() {
-    const title = newTitle.value.trim();
-    if (!title) {
-      newTitle.focus();
-      newTitle.classList.add('input-error');
-      setTimeout(() => newTitle.classList.remove('input-error'), 1200);
-      return;
-    }
-    addSubmit.disabled = true;
-    try {
-      const res = await fetch('api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title,
-          owner: newOwner.value.trim(),
-          status: newStatus.value,
-          due_date: newDue.value || '',
-        }),
-      });
-      if (res.status === 401) {
-        window.location.href = 'login';
-        return;
-      }
-      if (!res.ok) {
-        let msg = 'Could not add the task.';
-        try {
-          const j = await res.json();
-          if (j && j.error) msg = j.error;
-        } catch (e) {}
-        showToast(msg, 'error');
-        return;
-      }
-      const data = await res.json();
-      if (data && data.task) {
-        tasks.unshift(data.task);
-      }
-      newTitle.value = '';
-      newOwner.value = '';
-      newStatus.value = 'To do';
-      newDue.value = '';
-      showToast('Task added');
-      render();
-    } catch (err) {
-      showToast('Network error. Please try again.', 'error');
-    } finally {
-      addSubmit.disabled = false;
-    }
-  }
-
-  async function saveEdit() {
-    if (editingId === null) return;
-    const title = editTitle.value.trim();
-    if (!title) {
-      editTitle.focus();
-      editTitle.classList.add('input-error');
-      setTimeout(() => editTitle.classList.remove('input-error'), 1200);
-      return;
-    }
-    modalSave.disabled = true;
-    try {
-      const res = await fetch('api/tasks/' + editingId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title,
-          owner: editOwner.value.trim(),
-          status: editStatus.value,
-          due_date: editDue.value || '',
-        }),
-      });
-      if (res.status === 401) {
-        window.location.href = 'login';
-        return;
-      }
-      if (!res.ok) {
-        let msg = 'Could not save the task.';
-        try {
-          const j = await res.json();
-          if (j && j.error) msg = j.error;
-        } catch (e) {}
-        showToast(msg, 'error');
-        return;
-      }
-      const data = await res.json();
-      const idx = tasks.findIndex((t) => t.id === editingId);
-      if (idx !== -1 && data && data.task) {
-        tasks[idx] = data.task;
-      }
-      closeModal();
-      showToast('Task updated');
-      render();
-    } catch (err) {
-      showToast('Network error. Please try again.', 'error');
-    } finally {
-      modalSave.disabled = false;
-    }
-  }
-
-  async function deleteTask(id) {
-    modalDelete.disabled = true;
-    try {
-      const res = await fetch('api/tasks/' + id, { method: 'DELETE' });
-      if (res.status === 401) {
-        window.location.href = 'login';
-        return;
-      }
-      if (!res.ok) {
-        let msg = 'Could not delete the task.';
-        try {
-          const j = await res.json();
-          if (j && j.error) msg = j.error;
-        } catch (e) {}
-        showToast(msg, 'error');
-        return;
-      }
-      tasks = tasks.filter((t) => t.id !== id);
-      closeModal();
-      showToast('Task deleted');
-      render();
-    } catch (err) {
-      showToast('Network error. Please try again.', 'error');
-    } finally {
-      modalDelete.disabled = false;
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Viewer identity (from trusted X-Knowi-App-User header, if exposed)
-  // ---------------------------------------------------------------------------
-  function initViewer() {
-    const header = document.documentElement.getAttribute('data-knowi-user');
-    if (header) {
-      try {
-        const decoded = decodeURIComponent(escape(atob(header)));
-        const u = JSON.parse(decoded);
-        if (u && u.name) viewerNameEl.textContent = u.name;
-      } catch (e) {}
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Event wiring
-  // ---------------------------------------------------------------------------
-  addForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    createTask();
-  });
-
-  statusFilter.addEventListener('change', renderList);
-
-  overdueFilter.addEventListener('click', () => {
-    overdueActive = !overdueActive;
-    overdueFilter.classList.toggle('filter-toggle-active', overdueActive);
-    overdueFilter.setAttribute('aria-pressed', String(overdueActive));
-    loadTasks();
-  });
-
-  retryBtn.addEventListener('click', loadTasks);
-
-  taskList.addEventListener('click', (e) => {
-    const btn = e.target.closest('button[data-action]');
-    if (!btn) return;
-    const id = Number(btn.getAttribute('data-id'));
-    const task = tasks.find((t) => t.id === id);
-    if (!task) return;
-    if (btn.getAttribute('data-action') === 'edit') {
-      openModal(task);
-    } else if (btn.getAttribute('data-action') === 'delete') {
-      if (window.confirm('Delete this task? This cannot be undone.')) {
-        deleteTask(id);
-      }
-    }
-  });
-
-  editForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    saveEdit();
-  });
-
-  modalCancel.addEventListener('click', closeModal);
-  modalDelete.addEventListener('click', () => {
-    if (editingId === null) return;
-    if (window.confirm('Delete this task? This cannot be undone.')) {
-      deleteTask(editingId);
-    }
-  });
-
-  modalBackdrop.addEventListener('click', (e) => {
-    if (e.target === modalBackdrop) closeModal();
-  });
-
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modalBackdrop.hidden) {
-      closeModal();
-    }
-  });
-  document.addEventListener('keydown', trapFocus);
-
-  // ---------------------------------------------------------------------------
-  // Init
-  // ---------------------------------------------------------------------------
-  initViewer();
-  loadTasks();
 })();
