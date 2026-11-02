@@ -1,476 +1,365 @@
 window.knowiReportReady = false;
 
 (function () {
-  "use strict";
+  'use strict';
 
-  var STATUSES = ["To do", "In progress", "Done"];
+  var STATUSES = ['To do', 'In progress', 'Done'];
   var PAGE_SIZE = 50;
 
   var state = {
     tasks: [],
-    filter: "All",
-    visibleCount: PAGE_SIZE,
+    filter: 'All',
+    page: 1,
     editingId: null,
-    pendingDeleteId: null,
-    dbUnavailable: false,
-    loaded: false
+    loading: false,
+    error: null,
   };
 
-  var els = {};
+  var el = {};
 
-  function qs(id) {
+  function $(id) {
     return document.getElementById(id);
   }
 
-  function cacheEls() {
-    els.navCount = qs("nav-count");
-    els.viewerName = qs("viewer-name");
-    els.viewerAvatar = qs("viewer-avatar");
-    els.sessionExpired = qs("session-expired");
-    els.filterRow = qs("filter-row");
-    els.loadingState = qs("loading-state");
-    els.errorState = qs("error-state");
-    els.emptyState = qs("empty-state");
-    els.listWrap = qs("list-wrap");
-    els.taskRows = qs("task-rows");
-    els.showMoreWrap = qs("show-more-wrap");
-    els.showMoreBtn = qs("show-more-btn");
-    els.addTaskBtn = qs("add-task-btn");
-    els.emptyAddBtn = qs("empty-add-btn");
-    els.modalOverlay = qs("task-modal-overlay");
-    els.modalTitle = qs("modal-title");
-    els.taskForm = qs("task-form");
-    els.titleInput = qs("task-title");
-    els.ownerInput = qs("task-owner");
-    els.statusSelect = qs("task-status");
-    els.dueDateInput = qs("task-due-date");
-    els.formError = qs("form-error");
-    els.modalCancelBtn = qs("modal-cancel-btn");
-    els.modalSaveBtn = qs("modal-save-btn");
-    els.confirmOverlay = qs("confirm-delete-overlay");
-    els.confirmText = qs("confirm-text");
-    els.confirmCancelBtn = qs("confirm-cancel-btn");
-    els.confirmDeleteBtn = qs("confirm-delete-btn");
-    els.toast = qs("toast");
+  function cache() {
+    el.app = $('app');
+    el.sidebar = $('sidebar');
+    el.navTasks = $('nav-tasks');
+    el.countTasks = $('count-tasks');
+    el.viewer = $('viewer');
+    el.main = $('main');
+    el.btnNew = $('btn-new');
+    el.filterStatus = $('filter-status');
+    el.taskList = $('task-list');
+    el.dialog = $('task-dialog');
+    el.dialogTitle = $('dialog-title');
+    el.dialogClose = $('dialog-close');
+    el.form = $('task-form');
+    el.fTitle = $('f-title');
+    el.fOwner = $('f-owner');
+    el.fStatus = $('f-status');
+    el.btnSave = $('btn-save');
+    el.btnCancel = $('btn-cancel');
   }
 
-  function escapeHtml(str) {
-    return String(str).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    var h = d.getHours();
+    var min = d.getMinutes();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var hh = h % 12;
+    if (hh === 0) hh = 12;
+    var mm = min < 10 ? '0' + min : '' + min;
+    return m + '/' + day + '/' + d.getFullYear() + '  ' + hh + ':' + mm + ' ' + ampm;
   }
 
   function statusClass(status) {
-    if (status === "Done") return "status-done";
-    if (status === "In progress") return "status-progress";
-    return "status-todo";
+    if (status === 'Done') return 'status-done';
+    if (status === 'In progress') return 'status-progress';
+    return 'status-todo';
   }
 
-  function todayStr() {
-    return new Date().toISOString().slice(0, 10);
+  function visibleTasks() {
+    if (state.filter === 'All') return state.tasks;
+    return state.tasks.filter(function (t) {
+      return t.status === state.filter;
+    });
   }
 
-  function dueDateStr(dueDate) {
-    return typeof dueDate === "string" ? dueDate.slice(0, 10) : null;
-  }
-
-  function isOverdue(t) {
-    var d = dueDateStr(t.dueDate);
-    if (!d || t.status === "Done") return false;
-    return d < todayStr();
-  }
-
-  function formatDueDate(dueDate) {
-    var d = dueDateStr(dueDate);
-    if (!d) return null;
-    var parsed = new Date(d + "T00:00:00Z");
-    return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
-  }
-
-  function showToast(message, isError) {
-    els.toast.textContent = message;
-    els.toast.classList.toggle("toast-error", !!isError);
-    els.toast.hidden = false;
-    window.clearTimeout(els.toast._timer);
-    els.toast._timer = window.setTimeout(function () {
-      els.toast.hidden = true;
-    }, 3200);
-  }
-
-  function showSessionExpired() {
-    state.dbUnavailable = false;
-    els.sessionExpired.hidden = false;
-    els.loadingState.hidden = true;
-    els.errorState.hidden = true;
-    els.emptyState.hidden = true;
-    els.listWrap.hidden = true;
-    els.filterRow.hidden = true;
-    els.showMoreWrap.hidden = true;
-    els.addTaskBtn.hidden = true;
-  }
-
-  function apiFetch(url, opts) {
-    return fetch(url, opts).then(function (res) {
-      if (res.status === 401) {
-        showSessionExpired();
-        throw new Error("session-expired");
+  function renderFilters() {
+    var present = [];
+    for (var i = 0; i < STATUSES.length; i++) {
+      var s = STATUSES[i];
+      var found = false;
+      for (var j = 0; j < state.tasks.length; j++) {
+        if (state.tasks[j].status === s) { found = true; break; }
       }
-      return res;
-    });
+      if (found) present.push(s);
+    }
+
+    var html = '';
+    html += chip('All', 'All', state.filter === 'All');
+    for (var k = 0; k < present.length; k++) {
+      html += chip(present[k], present[k], state.filter === present[k]);
+    }
+    el.filterStatus.innerHTML = html;
   }
 
-  function loadSession() {
-    apiFetch("api/session")
-      .then(function (res) { return res.ok ? res.json() : { user: null }; })
-      .then(function (data) {
-        var user = data && data.user;
-        if (user && user.name) {
-          els.viewerName.textContent = user.name;
-          els.viewerAvatar.textContent = user.name.trim().slice(0, 1).toUpperCase();
-        } else {
-          els.viewerName.textContent = "Signed in via Knowi";
-          els.viewerAvatar.textContent = "?";
-        }
-      })
-      .catch(function () {});
+  function chip(value, label, active) {
+    return (
+      '<button type="button" class="filter-chip' + (active ? ' active' : '') +
+      '" data-status="' + esc(value) + '" aria-pressed="' + (active ? 'true' : 'false') + '">' +
+      esc(label) + '</button>'
+    );
   }
 
-  function loadTasks() {
-    els.loadingState.hidden = false;
-    els.errorState.hidden = true;
-    els.emptyState.hidden = true;
-    els.listWrap.hidden = true;
-    els.filterRow.hidden = true;
-    els.showMoreWrap.hidden = true;
+  function renderList() {
+    if (state.loading) {
+      el.taskList.innerHTML =
+        '<div class="shimmer" aria-hidden="true">' +
+        '<div class="shimmer-row"></div>' +
+        '<div class="shimmer-row"></div>' +
+        '<div class="shimmer-row"></div>' +
+        '<div class="shimmer-row"></div>' +
+        '<div class="shimmer-row"></div>' +
+        '</div>';
+      return;
+    }
 
-    apiFetch("api/tasks")
-      .then(function (res) {
-        if (res.status === 503) {
-          state.dbUnavailable = true;
-          throw new Error("unavailable");
-        }
-        if (!res.ok) {
-          throw new Error("failed");
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        state.tasks = (data.tasks || []).map(function (t) {
-          return { id: t.id, title: t.title, owner: t.owner, status: t.status, dueDate: t.due_date || null };
-        });
-        state.dbUnavailable = false;
-        state.loaded = true;
-        render();
-      })
-      .catch(function (err) {
-        if (err.message === "session-expired") return;
-        state.loaded = true;
-        els.loadingState.hidden = true;
-        els.errorState.hidden = false;
-        els.errorState.textContent = state.dbUnavailable
-          ? "The task database is unavailable right now. Try again in a moment."
-          : "Something went wrong loading tasks. Try again in a moment.";
-        els.navCount.textContent = "0";
-        markReportReady();
-      });
+    if (state.error) {
+      el.taskList.innerHTML =
+        '<div class="error" role="alert">' +
+        '<p class="error-msg">' + esc(state.error) + '</p>' +
+        '<button type="button" class="btn btn-ghost" data-action="retry">Retry</button>' +
+        '</div>';
+      return;
+    }
+
+    var all = state.tasks;
+    if (all.length === 0) {
+      el.taskList.innerHTML =
+        '<div class="empty">' +
+        '<p class="empty-title">No tasks yet</p>' +
+        '<p class="empty-sub">Create your first task to start tracking work.</p>' +
+        '</div>';
+      return;
+    }
+
+    var visible = visibleTasks();
+    if (visible.length === 0) {
+      el.taskList.innerHTML =
+        '<div class="empty">' +
+        '<p class="empty-title">No ' + esc(state.filter) + ' tasks</p>' +
+        '<p class="empty-sub">Switch filters or add a new task.</p>' +
+        '</div>';
+      return;
+    }
+
+    var start = (state.page - 1) * PAGE_SIZE;
+    var end = Math.min(start + PAGE_SIZE, visible.length);
+    var rows = visible.slice(start, end);
+
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var t = rows[i];
+      html +=
+        '<div class="task-row" data-id="' + t.id + '">' +
+        '<div class="task-main">' +
+        '<span class="task-title">' + esc(t.title) + '</span>' +
+        '<span class="task-owner">' + (t.owner ? esc(t.owner) : '<span class="muted">Unassigned</span>') + '</span>' +
+        '</div>' +
+        '<span class="status-pill ' + statusClass(t.status) + '">' + esc(t.status) + '</span>' +
+        '<span class="task-created">' + esc(fmtDate(t.created_at)) + '</span>' +
+        '<div class="task-actions">' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-action="edit" data-id="' + t.id + '" aria-label="Edit task">Edit</button>' +
+        '<button type="button" class="btn btn-ghost btn-sm btn-danger" data-action="delete" data-id="' + t.id + '" aria-label="Delete task">Delete</button>' +
+        '</div>' +
+        '</div>';
+    }
+
+    if (visible.length > PAGE_SIZE) {
+      var hasMore = end < visible.length;
+      html +=
+        '<div class="list-footer">' +
+        '<span class="list-count">Showing ' + (start + 1) + '–' + end + ' of ' + visible.length + '</span>' +
+        (hasMore ? '<button type="button" class="btn btn-ghost" data-action="more">Show more</button>' : '') +
+        '</div>';
+    }
+
+    el.taskList.innerHTML = html;
   }
 
-  function markReportReady() {
-    window.knowiReportReady = true;
-  }
-
-  function filteredTasks() {
-    if (state.filter === "All") return state.tasks;
-    if (state.filter === "Overdue") return state.tasks.filter(isOverdue);
-    return state.tasks.filter(function (t) { return t.status === state.filter; });
-  }
-
-  function renderFilterChips() {
-    var counts = { All: state.tasks.length, Overdue: 0 };
-    STATUSES.forEach(function (s) { counts[s] = 0; });
-    state.tasks.forEach(function (t) {
-      if (counts.hasOwnProperty(t.status)) counts[t.status] += 1;
-      if (isOverdue(t)) counts.Overdue += 1;
-    });
-
-    var options = ["All"].concat(STATUSES.filter(function (s) {
-      return state.tasks.some(function (t) { return t.status === s; }) || s === state.filter;
-    }));
-    if (counts.Overdue > 0 || state.filter === "Overdue") options.push("Overdue");
-    if (options.indexOf(state.filter) === -1) options.push(state.filter);
-
-    els.filterRow.innerHTML = "";
-    options.forEach(function (opt) {
-      var btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "filter-chip";
-      btn.setAttribute("aria-pressed", String(state.filter === opt));
-      btn.innerHTML = escapeHtml(opt) + ' <span class="chip-count">' + (counts[opt] || 0) + "</span>";
-      btn.addEventListener("click", function () {
-        state.filter = opt;
-        state.visibleCount = PAGE_SIZE;
-        render();
-      });
-      els.filterRow.appendChild(btn);
-    });
-  }
-
-  function renderRows() {
-    var list = filteredTasks();
-    var visible = list.slice(0, state.visibleCount);
-
-    els.taskRows.innerHTML = "";
-    visible.forEach(function (t) {
-      var tr = document.createElement("tr");
-
-      var titleTd = document.createElement("td");
-      var titleSpan = document.createElement("span");
-      titleSpan.className = "task-title";
-      titleSpan.textContent = t.title;
-      titleTd.appendChild(titleSpan);
-
-      var ownerTd = document.createElement("td");
-      ownerTd.className = "task-owner";
-      ownerTd.textContent = t.owner;
-
-      var statusTd = document.createElement("td");
-      var chip = document.createElement("span");
-      chip.className = "status-chip " + statusClass(t.status);
-      chip.textContent = t.status;
-      statusTd.appendChild(chip);
-
-      var dueTd = document.createElement("td");
-      var dueSpan = document.createElement("span");
-      var formattedDue = formatDueDate(t.dueDate);
-      if (!formattedDue) {
-        dueSpan.className = "task-due none";
-        dueSpan.textContent = "No due date";
-      } else {
-        dueSpan.className = "task-due" + (isOverdue(t) ? " overdue" : "");
-        dueSpan.textContent = formattedDue + (isOverdue(t) ? " (Overdue)" : "");
-      }
-      dueTd.appendChild(dueSpan);
-
-      var actionsTd = document.createElement("td");
-      actionsTd.className = "actions-cell";
-      var actionsWrap = document.createElement("div");
-      actionsWrap.className = "row-actions";
-
-      var editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.className = "btn-icon";
-      editBtn.setAttribute("aria-label", "Edit " + t.title);
-      editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3a1.4 1.4 0 0 1 2 2L4.8 12.8l-2.7.6.6-2.7L11.3 2.3Z" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>';
-      editBtn.addEventListener("click", function () { openModal("edit", t); });
-
-      var deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "btn-icon danger";
-      deleteBtn.setAttribute("aria-label", "Delete " + t.title);
-      deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M4.5 4.5 5 13a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8.5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>';
-      deleteBtn.addEventListener("click", function () { openDeleteConfirm(t); });
-
-      actionsWrap.appendChild(editBtn);
-      actionsWrap.appendChild(deleteBtn);
-      actionsTd.appendChild(actionsWrap);
-
-      tr.appendChild(titleTd);
-      tr.appendChild(ownerTd);
-      tr.appendChild(statusTd);
-      tr.appendChild(dueTd);
-      tr.appendChild(actionsTd);
-      els.taskRows.appendChild(tr);
-    });
-
-    els.showMoreWrap.hidden = list.length <= state.visibleCount;
+  function renderCount() {
+    el.countTasks.textContent = String(state.tasks.length);
   }
 
   function render() {
-    els.loadingState.hidden = true;
-    els.errorState.hidden = true;
-
-    els.navCount.textContent = String(state.tasks.length);
-
-    if (state.tasks.length === 0) {
-      els.filterRow.hidden = true;
-      els.listWrap.hidden = true;
-      els.showMoreWrap.hidden = true;
-      els.emptyState.hidden = false;
-      markReportReady();
-      return;
-    }
-
-    els.emptyState.hidden = true;
-    els.filterRow.hidden = false;
-    renderFilterChips();
-
-    var list = filteredTasks();
-    if (list.length === 0) {
-      els.listWrap.hidden = true;
-      els.showMoreWrap.hidden = true;
-    } else {
-      els.listWrap.hidden = false;
-      renderRows();
-    }
-    markReportReady();
+    renderCount();
+    renderFilters();
+    renderList();
   }
 
-  var lastFocusedEl = null;
-
-  function openModal(mode, task) {
-    lastFocusedEl = document.activeElement;
-    state.editingId = mode === "edit" ? task.id : null;
-    els.modalTitle.textContent = mode === "edit" ? "Edit task" : "Add task";
-    els.titleInput.value = mode === "edit" ? task.title : "";
-    els.ownerInput.value = mode === "edit" ? task.owner : "";
-    els.statusSelect.value = mode === "edit" ? task.status : "To do";
-    els.dueDateInput.value = mode === "edit" ? (dueDateStr(task.dueDate) || "") : "";
-    els.formError.textContent = "";
-    els.formError.hidden = true;
-    els.modalOverlay.hidden = false;
-    els.titleInput.focus();
+  function setLoading(v) {
+    state.loading = v;
+    if (v) state.error = null;
+    render();
   }
 
-  function closeModal() {
-    els.modalOverlay.hidden = true;
-    state.editingId = null;
-    if (lastFocusedEl) lastFocusedEl.focus();
-  }
-
-  function openDeleteConfirm(task) {
-    lastFocusedEl = document.activeElement;
-    state.pendingDeleteId = task.id;
-    els.confirmText.textContent = 'Delete "' + task.title + '"? This can’t be undone.';
-    els.confirmOverlay.hidden = false;
-    els.confirmCancelBtn.focus();
-  }
-
-  function closeDeleteConfirm() {
-    els.confirmOverlay.hidden = true;
-    state.pendingDeleteId = null;
-    if (lastFocusedEl) lastFocusedEl.focus();
-  }
-
-  function submitForm(e) {
-    e.preventDefault();
-    var title = els.titleInput.value.trim();
-    var owner = els.ownerInput.value.trim();
-    var status = els.statusSelect.value;
-    var dueDate = els.dueDateInput.value ? els.dueDateInput.value.trim() : "";
-
-    if (!title) {
-      els.formError.textContent = "Enter a title for this task.";
-      els.formError.hidden = false;
-      els.titleInput.focus();
-      return;
-    }
-    if (!owner) {
-      els.formError.textContent = "Enter who owns this task.";
-      els.formError.hidden = false;
-      els.ownerInput.focus();
-      return;
-    }
-
-    els.formError.hidden = true;
-    els.modalSaveBtn.disabled = true;
-
-    var isEdit = state.editingId !== null;
-    var url = isEdit ? "api/tasks/" + state.editingId : "api/tasks";
-    var method = isEdit ? "PUT" : "POST";
-
-    apiFetch(url, {
-      method: method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title, owner: owner, status: status, dueDate: dueDate || null })
-    })
-      .then(function (res) {
-        if (res.status === 503) {
-          showToast("The task database is unavailable right now. Try again shortly.", true);
-          return null;
-        }
-        if (!res.ok) {
-          return res.json().then(function (d) {
-            throw new Error((d && d.error) || "Save failed");
-          });
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data) return;
-        closeModal();
-        showToast(isEdit ? "Task updated." : "Task added.", false);
-        loadTasks();
-      })
-      .catch(function (err) {
-        if (err.message === "session-expired") return;
-        els.formError.textContent = err.message || "Couldn’t save this task. Try again.";
-        els.formError.hidden = false;
-      })
-      .finally(function () {
-        els.modalSaveBtn.disabled = false;
-      });
-  }
-
-  function confirmDelete() {
-    if (state.pendingDeleteId === null) return;
-    els.confirmDeleteBtn.disabled = true;
-    apiFetch("api/tasks/" + state.pendingDeleteId, { method: "DELETE" })
-      .then(function (res) {
-        if (res.status === 503) {
-          showToast("The task database is unavailable right now. Try again shortly.", true);
+  function loadTasks() {
+    setLoading(true);
+    fetch('api/tasks', { headers: { Accept: 'application/json' } })
+      .then(function (r) {
+        if (r.status === 401) {
+          state.loading = false;
+          state.error = 'Your session has expired. Please sign in again.';
+          render();
+          window.knowiReportReady = true;
           return;
         }
-        if (!res.ok && res.status !== 204) {
-          throw new Error("Delete failed");
-        }
-        closeDeleteConfirm();
-        showToast("Task deleted.", false);
-        loadTasks();
+        if (!r.ok) throw new Error('Request failed');
+        return r.json();
       })
-      .catch(function (err) {
-        if (err.message === "session-expired") return;
-        showToast("Couldn’t delete this task. Try again.", true);
+      .then(function (data) {
+        state.tasks = (data && data.tasks) || [];
+        state.page = 1;
+        setLoading(false);
+        window.knowiReportReady = true;
       })
-      .finally(function () {
-        els.confirmDeleteBtn.disabled = false;
+      .catch(function (e) {
+        state.loading = false;
+        state.error = 'Could not load tasks. Please try again.';
+        render();
+        window.knowiReportReady = true;
       });
   }
 
-  function bindEvents() {
-    els.addTaskBtn.addEventListener("click", function () { openModal("add"); });
-    els.emptyAddBtn.addEventListener("click", function () { openModal("add"); });
-    els.modalCancelBtn.addEventListener("click", closeModal);
-    els.taskForm.addEventListener("submit", submitForm);
-    els.confirmCancelBtn.addEventListener("click", closeDeleteConfirm);
-    els.confirmDeleteBtn.addEventListener("click", confirmDelete);
-    els.showMoreBtn.addEventListener("click", function () {
-      state.visibleCount += PAGE_SIZE;
-      renderRows();
-    });
+  function openDialog(task) {
+    state.editingId = task ? task.id : null;
+    el.dialogTitle.textContent = task ? 'Edit task' : 'New task';
+    el.fTitle.value = task ? task.title : '';
+    el.fOwner.value = task ? task.owner : '';
+    el.fStatus.value = task ? task.status : 'To do';
+    el.dialog.hidden = false;
+    el.fTitle.focus();
+  }
 
-    [els.modalOverlay, els.confirmOverlay].forEach(function (overlay) {
-      overlay.addEventListener("click", function (e) {
-        if (e.target === overlay) {
-          if (overlay === els.modalOverlay) closeModal();
-          else closeDeleteConfirm();
-        }
+  function closeDialog() {
+    el.dialog.hidden = true;
+    state.editingId = null;
+  }
+
+  function saveTask() {
+    var title = el.fTitle.value.trim();
+    if (!title) {
+      el.fTitle.focus();
+      return;
+    }
+    var owner = el.fOwner.value.trim();
+    var status = el.fStatus.value;
+    var payload = { title: title, owner: owner, status: status };
+
+    el.btnSave.disabled = true;
+    var isEdit = state.editingId != null;
+
+    var req = isEdit
+      ? fetch('api/tasks/' + state.editingId, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+      : fetch('api/tasks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+    req
+      .then(function (r) {
+        if (!r.ok) throw new Error('Save failed');
+        return r.json();
+      })
+      .then(function () {
+        closeDialog();
+        loadTasks();
+      })
+      .catch(function () {
+        el.btnSave.disabled = false;
+        alert('Could not save the task. Please try again.');
       });
-    });
+  }
 
-    document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") {
-        if (!els.modalOverlay.hidden) closeModal();
-        if (!els.confirmOverlay.hidden) closeDeleteConfirm();
+  function deleteTask(id) {
+    var task = null;
+    for (var i = 0; i < state.tasks.length; i++) {
+      if (state.tasks[i].id === id) { task = state.tasks[i]; break; }
+    }
+    var label = task ? task.title : 'this task';
+    if (!window.confirm('Delete "' + label + '"? This cannot be undone.')) return;
+
+    fetch('api/tasks/' + id, { method: 'DELETE' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('Delete failed');
+        return r.json();
+      })
+      .then(function () {
+        loadTasks();
+      })
+      .catch(function () {
+        alert('Could not delete the task. Please try again.');
+      });
+  }
+
+  function onFilterClick(e) {
+    var btn = e.target.closest ? e.target.closest('.filter-chip') : null;
+    if (!btn) return;
+    state.filter = btn.getAttribute('data-status') || 'All';
+    state.page = 1;
+    render();
+  }
+
+  function onListClick(e) {
+    var btn = e.target.closest ? e.target.closest('button[data-action]') : null;
+    if (!btn) return;
+    var action = btn.getAttribute('data-action');
+    if (action === 'edit') {
+      var id = Number(btn.getAttribute('data-id'));
+      var task = null;
+      for (var i = 0; i < state.tasks.length; i++) {
+        if (state.tasks[i].id === id) { task = state.tasks[i]; break; }
       }
-    });
+      if (task) openDialog(task);
+    } else if (action === 'delete') {
+      deleteTask(Number(btn.getAttribute('data-id')));
+    } else if (action === 'more') {
+      state.page += 1;
+      renderList();
+    } else if (action === 'retry') {
+      loadTasks();
+    }
+  }
+
+  function onFormSubmit(e) {
+    e.preventDefault();
+    saveTask();
+  }
+
+  function onDialogKey(e) {
+    if (e.key === 'Escape' && !el.dialog.hidden) {
+      closeDialog();
+    }
   }
 
   function init() {
-    cacheEls();
-    bindEvents();
-    loadSession();
+    cache();
+    el.btnNew.addEventListener('click', function () { openDialog(null); });
+    el.dialogClose.addEventListener('click', closeDialog);
+    el.btnCancel.addEventListener('click', closeDialog);
+    el.form.addEventListener('submit', onFormSubmit);
+    el.filterStatus.addEventListener('click', onFilterClick);
+    el.taskList.addEventListener('click', onListClick);
+    el.dialog.addEventListener('click', function (e) {
+      if (e.target === el.dialog) closeDialog();
+    });
+    document.addEventListener('keydown', onDialogKey);
     loadTasks();
   }
 
-  document.addEventListener("DOMContentLoaded", init);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

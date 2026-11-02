@@ -1,134 +1,97 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Tasks</title>
-<link rel="stylesheet" href="app.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Tracker</title>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div class="app-shell">
-  <aside class="sidebar">
-    <div class="sidebar-top">
-      <span class="brand">Tasks</span>
-    </div>
-    <nav class="sidebar-nav" aria-label="Primary">
-      <a class="nav-link active" href="." aria-current="page">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-          <rect x="2.5" y="2.5" width="13" height="13" rx="3" stroke="#273D44" stroke-width="1.3"/>
-          <path d="M5.5 9l2 2 4.5-5" stroke="#273D44" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-logo">
+        <svg class="logo-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+          <path d="M8 12.5l2.6 2.6L16 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
         </svg>
-        <span class="label">Tasks</span>
-        <span class="count-pill" id="nav-count">0</span>
-      </a>
-    </nav>
-    <div class="sidebar-viewer">
-      <div class="viewer-avatar" id="viewer-avatar">?</div>
-      <div class="viewer-info">
-        <span class="viewer-name" id="viewer-name">Loading viewer&hellip;</span>
-        <span class="viewer-sub">Signed in with Knowi</span>
+        <span class="logo-name">Task Tracker</span>
       </div>
-    </div>
-  </aside>
-
-  <main class="canvas">
-    <div class="canvas-inner">
-      <header class="page-header">
-        <div class="page-header-text">
-          <h1>Tasks</h1>
-          <p class="page-sub">Track what&rsquo;s being worked on and who owns it.</p>
+      <nav class="sidebar-nav" aria-label="Primary">
+        <a href="#" id="nav-tasks" class="nav-link active" aria-current="page">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+          </svg>
+          <span class="nav-label">Tasks</span>
+          <span class="count-pill" id="count-tasks">0</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div id="viewer" class="viewer">
+          <span class="viewer-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <circle cx="12" cy="9" r="3.4" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
+              <path d="M5 19c0-3.3 3.1-5.4 7-5.4s7 2.1 7 5.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+            </svg>
+          </span>
+          <span class="viewer-name">Signed in</span>
         </div>
-        <button type="button" class="btn btn-primary" id="add-task-btn">Add task</button>
+      </div>
+    </aside>
+
+    <main id="main">
+      <header class="page-header">
+        <h1 class="page-title">Tasks</h1>
+        <button type="button" id="btn-new" class="btn btn-primary">
+          <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>
+          </svg>
+          New task
+        </button>
       </header>
 
-      <div id="session-expired" class="state-banner" hidden>
-        Your session has expired. <a href="login">Sign in again</a> to keep working on your tasks.
-      </div>
+      <div class="filter-row" id="filter-status" role="group" aria-label="Filter tasks by status"></div>
 
-      <div class="filter-row" id="filter-row" role="group" aria-label="Filter tasks" hidden></div>
-
-      <div id="loading-state" class="skeleton-list" aria-hidden="true">
-        <div class="skeleton-row"><span class="skeleton-bar" style="width:40%"></span><span class="skeleton-bar" style="width:20%"></span><span class="skeleton-bar" style="width:15%"></span></div>
-        <div class="skeleton-row"><span class="skeleton-bar" style="width:55%"></span><span class="skeleton-bar" style="width:18%"></span><span class="skeleton-bar" style="width:15%"></span></div>
-        <div class="skeleton-row"><span class="skeleton-bar" style="width:35%"></span><span class="skeleton-bar" style="width:22%"></span><span class="skeleton-bar" style="width:15%"></span></div>
-      </div>
-
-      <div id="error-state" class="state-banner state-error" role="alert" hidden></div>
-
-      <div id="empty-state" class="empty-state" hidden>
-        <h2>No tasks yet</h2>
-        <p>Add your first task to start tracking who&rsquo;s doing what.</p>
-        <button type="button" class="btn btn-primary" id="empty-add-btn">Add your first task</button>
-      </div>
-
-      <div id="list-wrap" class="table-wrap" hidden>
-        <table class="ledger">
-          <thead>
-            <tr>
-              <th scope="col">Title</th>
-              <th scope="col">Owner</th>
-              <th scope="col">Status</th>
-              <th scope="col">Due date</th>
-              <th scope="col" class="actions-col">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="task-rows"></tbody>
-        </table>
-      </div>
-
-      <div class="show-more-wrap" id="show-more-wrap" hidden>
-        <button type="button" class="btn btn-secondary" id="show-more-btn">Show more</button>
-      </div>
-    </div>
-  </main>
-</div>
-
-<div class="modal-overlay" id="task-modal-overlay" hidden>
-  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-    <h2 id="modal-title">Add task</h2>
-    <form id="task-form">
-      <div class="field-group">
-        <label for="task-title">Title</label>
-        <input id="task-title" name="title" type="text" maxlength="200" autocomplete="off" required />
-      </div>
-      <div class="field-group">
-        <label for="task-owner">Owner</label>
-        <input id="task-owner" name="owner" type="text" maxlength="120" autocomplete="off" required />
-      </div>
-      <div class="field-group">
-        <label for="task-status">Status</label>
-        <select id="task-status" name="status">
-          <option value="To do">To do</option>
-          <option value="In progress">In progress</option>
-          <option value="Done">Done</option>
-        </select>
-      </div>
-      <div class="field-group">
-        <label for="task-due-date">Due date</label>
-        <input id="task-due-date" name="dueDate" type="date" autocomplete="off" />
-      </div>
-      <p class="field-error" id="form-error" role="alert" hidden></p>
-      <div class="modal-actions">
-        <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="modal-save-btn">Save task</button>
-      </div>
-    </form>
+      <section class="content" aria-live="polite">
+        <div id="task-list" class="task-list"></div>
+      </section>
+    </main>
   </div>
-</div>
 
-<div class="modal-overlay" id="confirm-delete-overlay" hidden>
-  <div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-    <h2 id="confirm-title">Delete task?</h2>
-    <p id="confirm-text"></p>
-    <div class="modal-actions">
-      <button type="button" class="btn btn-secondary" id="confirm-cancel-btn">Cancel</button>
-      <button type="button" class="btn btn-danger" id="confirm-delete-btn">Delete</button>
+  <div id="task-dialog" class="dialog-backdrop" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <div class="dialog-head">
+        <h2 id="dialog-title" class="dialog-title">New task</h2>
+        <button type="button" id="dialog-close" class="dialog-close" aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+          </svg>
+        </button>
+      </div>
+      <form id="task-form" novalidate>
+        <div class="field">
+          <label class="field-label" for="f-title">Title</label>
+          <input type="text" id="f-title" name="title" class="input" maxlength="200" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="field-label" for="f-owner">Owner</label>
+          <input type="text" id="f-owner" name="owner" class="input" maxlength="120" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="field-label" for="f-status">Status</label>
+          <select id="f-status" name="status" class="input select">
+            <option value="To do">To do</option>
+            <option value="In progress">In progress</option>
+            <option value="Done">Done</option>
+          </select>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" id="btn-cancel" class="btn btn-ghost">Cancel</button>
+          <button type="submit" id="btn-save" class="btn btn-primary">Save task</button>
+        </div>
+      </form>
     </div>
   </div>
-</div>
 
-<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
-
-<script src="app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
