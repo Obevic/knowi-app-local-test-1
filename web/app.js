@@ -1,388 +1,425 @@
 window.knowiReportReady = false;
 
 (function () {
-  'use strict';
+  "use strict";
 
-  var COLUMNS = [
-    'AE_Name',
-    'Amount',
-    'Company',
-    'Created_Date',
-    'Opportunity_ID',
-    'Probability',
-    'Product',
-    'Region',
-    'SDR_Name',
-    'Stage'
-  ];
-
-  var FILTER_FIELDS = ['Stage', 'Region', 'Product', 'AE_Name', 'SDR_Name', 'Company'];
+  var FIELDS = ["AE_Name", "Amount", "Company", "Created_Date", "Opportunity_ID", "Probability", "Product", "Region", "SDR_Name", "Stage"];
+  var PAGE_SIZE = 50;
 
   var state = {
     columns: [],
     rows: [],
+    truncated: false,
     filtered: [],
-    filterValues: {},
-    page: 1,
-    pageSize: 50,
-    loading: false,
-    loaded: false
+    visibleCount: PAGE_SIZE,
+    sort: { field: "Created_Date", dir: "desc" },
+    filters: { Region: "", Stage: "", Product: "", AE_Name: "", SDR_Name: "" },
+    search: ""
   };
 
   var els = {};
 
-  function $(id) {
-    return document.getElementById(id);
-  }
-
-  function cacheEls() {
-    els.app = $('app');
-    els.sidebar = $('sidebar');
-    els.navCount = $('nav-count');
-    els.viewerName = $('viewer-name');
-    els.summary = $('summary');
-    els.statCount = $('stat-count');
-    els.statTotal = $('stat-total');
-    els.statAvgAmount = $('stat-avg-amount');
-    els.statAvgProb = $('stat-avg-prob');
-    els.filters = $('filters');
-    els.clearFilters = $('clear-filters');
-    els.tableWrap = $('table-wrap');
-    els.ledger = $('ledger');
-    els.ledgerBody = $('ledger-body');
-    els.pager = $('pager');
-    els.pageSize = $('page-size');
-    els.prevPage = $('prev-page');
-    els.nextPage = $('next-page');
-    els.showing = $('showing');
-    els.loading = $('loading');
-    els.empty = $('empty');
-    els.error = $('error');
-    els.sessionExpired = $('session-expired');
-    els.loginLink = $('login-link');
-  }
-
-  function filterSelects() {
-    return Array.prototype.slice.call(document.querySelectorAll('.filter-select[data-field]'));
-  }
-
-  function setStates() {
-    var showLoading = state.loading;
-    var showSession = els.sessionExpired && !els.sessionExpired.hidden;
-    var showEmpty = !state.loading && !showSession && state.loaded && state.filtered.length === 0;
-    var showData = !state.loading && !showSession && state.loaded && state.filtered.length > 0;
-
-    els.loading.hidden = !showLoading;
-    els.sessionExpired.hidden = !showSession;
-    els.empty.hidden = !showEmpty;
-    els.error.hidden = !(state.error && !showLoading && !showSession);
-
-    var showContent = showData || showEmpty;
-    els.summary.hidden = !showContent;
-    els.filters.hidden = !showContent;
-    els.tableWrap.hidden = !showData;
-    els.pager.hidden = !showData;
-  }
-
-  function fmtInt(n) {
-    return Math.round(n).toLocaleString('en-US');
-  }
-
-  function fmtMoney(n) {
-    return '$' + Math.round(n).toLocaleString('en-US');
-  }
-
-  function fmtDate(v) {
-    if (v === null || v === undefined || v === '') return '—';
-    var d = new Date(v);
-    if (isNaN(d.getTime())) return String(v);
-    var m = d.getMonth() + 1;
-    var day = d.getDate();
-    return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day);
-  }
-
-  function stageClass(stage) {
-    var s = String(stage || '').toLowerCase();
-    if (s.indexOf('won') !== -1 || s.indexOf('closed') !== -1 || s.indexOf('done') !== -1 || s.indexOf('complete') !== -1) {
-      return 'stage-done';
-    }
-    if (s.indexOf('lost') !== -1 || s.indexOf('miss') !== -1 || s.indexOf('risk') !== -1 || s.indexOf('cancel') !== -1) {
-      return 'stage-risk';
-    }
-    if (s.indexOf('late') !== -1 || s.indexOf('due') !== -1 || s.indexOf('overdue') !== -1 || s.indexOf('pending') !== -1) {
-      return 'stage-late';
-    }
-    if (s.indexOf('wait') !== -1 || s.indexOf('hold') !== -1 || s.indexOf('review') !== -1 || s.indexOf('approv') !== -1) {
-      return 'stage-wait';
-    }
-    return 'stage-neutral';
-  }
-
-  function updateSummary() {
-    var rows = state.filtered;
-    var count = rows.length;
-    var total = 0;
-    var probSum = 0;
-    var probCount = 0;
-    var amountCount = 0;
-
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var amt = Number(r.Amount);
-      if (!isNaN(amt)) {
-        total += amt;
-        amountCount++;
-      }
-      var prob = Number(r.Probability);
-      if (!isNaN(prob)) {
-        probSum += prob;
-        probCount++;
-      }
-    }
-
-    var avgAmount = amountCount ? total / amountCount : 0;
-    var avgProb = probCount ? probSum / probCount : 0;
-
-    els.statCount.textContent = fmtInt(count);
-    els.statTotal.textContent = fmtMoney(total);
-    els.statAvgAmount.textContent = fmtMoney(avgAmount);
-    els.statAvgProb.textContent = (avgProb * 100).toFixed(1) + '%';
-  }
-
-  function renderTable() {
-    var start = (state.page - 1) * state.pageSize;
-    var end = Math.min(start + state.pageSize, state.filtered.length);
-    var slice = state.filtered.slice(start, end);
-
-    var html = '';
-    for (var i = 0; i < slice.length; i++) {
-      var r = slice[i];
-      var stage = r.Stage == null ? '' : String(r.Stage);
-      var stageCell = stage
-        ? '<span class="stage-pill ' + stageClass(stage) + '">' + escapeHtml(stage) + '</span>'
-        : '<span class="stage-pill stage-empty">—</span>';
-      var amt = Number(r.Amount);
-      var prob = Number(r.Probability);
-
-      html +=
-        '<tr>' +
-        '<td class="cell-id">' + escapeHtml(r.Opportunity_ID == null ? '' : String(r.Opportunity_ID)) + '</td>' +
-        '<td class="cell-company">' + escapeHtml(r.Company == null ? '' : String(r.Company)) + '</td>' +
-        '<td>' + escapeHtml(r.Product == null ? '' : String(r.Product)) + '</td>' +
-        '<td>' + stageCell + '</td>' +
-        '<td>' + escapeHtml(r.Region == null ? '' : String(r.Region)) + '</td>' +
-        '<td>' + escapeHtml(r.AE_Name == null ? '' : String(r.AE_Name)) + '</td>' +
-        '<td>' + escapeHtml(r.SDR_Name == null ? '' : String(r.SDR_Name)) + '</td>' +
-        '<td class="num">' + (isNaN(amt) ? '—' : fmtMoney(amt)) + '</td>' +
-        '<td class="num">' + (isNaN(prob) ? '—' : (prob * 100).toFixed(0) + '%') + '</td>' +
-        '<td class="cell-date">' + fmtDate(r.Created_Date) + '</td>' +
-        '</tr>';
-    }
-    els.ledgerBody.innerHTML = html;
-  }
-
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function updatePager() {
-    var total = state.filtered.length;
-    var start = total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
-    var end = Math.min(state.page * state.pageSize, total);
-    els.showing.textContent = 'Showing ' + start + '–' + end + ' of ' + total;
-
-    var maxPage = Math.max(1, Math.ceil(total / state.pageSize));
-    els.prevPage.disabled = state.page <= 1;
-    els.nextPage.disabled = state.page >= maxPage;
-  }
-
-  function applyFilters() {
-    var rows = state.rows;
-    var out = [];
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      var ok = true;
-      for (var j = 0; j < FILTER_FIELDS.length; j++) {
-        var f = FILTER_FIELDS[j];
-        var val = state.filterValues[f];
-        if (val) {
-          var cell = r[f] == null ? '' : String(r[f]);
-          if (cell !== val) {
-            ok = false;
-            break;
-          }
-        }
-      }
-      if (ok) out.push(r);
-    }
-    state.filtered = out;
-    state.page = 1;
-    updateSummary();
-    renderTable();
-    updatePager();
-    setStates();
-  }
-
-  function buildFilterOptions() {
-    var selects = filterSelects();
-    for (var i = 0; i < selects.length; i++) {
-      var sel = selects[i];
-      var field = sel.getAttribute('data-field');
-      var values = uniqueValues(field);
-      var current = state.filterValues[field] || '';
-      var html = '<option value="">All</option>';
-      for (var j = 0; j < values.length; j++) {
-        var v = values[j];
-        html += '<option value="' + escapeHtml(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
-      }
-      sel.innerHTML = html;
-    }
-  }
-
-  function uniqueValues(field) {
-    var seen = {};
-    var out = [];
-    for (var i = 0; i < state.rows.length; i++) {
-      var v = state.rows[i][field];
-      if (v === null || v === undefined || v === '') continue;
-      var key = String(v);
-      if (!seen[key]) {
-        seen[key] = true;
-        out.push(key);
-      }
-    }
-    out.sort(function (a, b) {
-      return a.localeCompare(b);
-    });
-    return out;
-  }
-
-  function showSessionExpired() {
-    state.loading = false;
-    state.loaded = false;
-    els.sessionExpired.hidden = false;
-    els.loading.hidden = true;
-    els.empty.hidden = true;
-    els.error.hidden = true;
-    els.summary.hidden = true;
-    els.filters.hidden = true;
-    els.tableWrap.hidden = true;
-    els.pager.hidden = true;
-  }
-
-  function showError() {
-    state.loading = false;
-    state.loaded = false;
-    state.error = true;
-    els.error.hidden = false;
-    els.loading.hidden = true;
-    els.empty.hidden = true;
-    els.sessionExpired.hidden = true;
-    els.summary.hidden = true;
-    els.filters.hidden = true;
-    els.tableWrap.hidden = true;
-    els.pager.hidden = true;
-  }
-
-  function loadData() {
-    state.loading = true;
-    state.error = false;
-    setStates();
-    return fetch('api/opportunities', { headers: { Accept: 'application/json' } })
-      .then(function (res) {
-        if (res.status === 401) {
-          showSessionExpired();
-          return;
-        }
-        if (!res.ok) throw new Error('bad status');
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data) return;
-        state.columns = data.columns || COLUMNS;
-        state.rows = (data.rows || []).map(function (row) {
-          var obj = {};
-          for (var i = 0; i < state.columns.length; i++) {
-            obj[state.columns[i]] = row[i];
-          }
-          return obj;
-        });
-        state.loaded = true;
-        state.loading = false;
-        els.navCount.textContent = fmtInt(state.rows.length);
-        buildFilterOptions();
-        applyFilters();
-        window.knowiReportReady = true;
-      })
-      .catch(function () {
-        showError();
-      });
-  }
-
-  function onFilterChange(e) {
-    var field = e.target.getAttribute('data-field');
-    if (!field) return;
-    state.filterValues[field] = e.target.value;
-    applyFilters();
-  }
-
-  function clearFilters() {
-    var selects = filterSelects();
-    for (var i = 0; i < selects.length; i++) {
-      selects[i].value = '';
-      state.filterValues[selects[i].getAttribute('data-field')] = '';
-    }
-    applyFilters();
-  }
-
-  function onPageSizeChange(e) {
-    state.pageSize = parseInt(e.target.value, 10) || 50;
-    state.page = 1;
-    renderTable();
-    updatePager();
-  }
-
-  function onPrev() {
-    if (state.page > 1) {
-      state.page--;
-      renderTable();
-      updatePager();
-    }
-  }
-
-  function onNext() {
-    var maxPage = Math.max(1, Math.ceil(state.filtered.length / state.pageSize));
-    if (state.page < maxPage) {
-      state.page++;
-      renderTable();
-      updatePager();
-    }
-  }
+  document.addEventListener("DOMContentLoaded", init);
 
   function init() {
-    cacheEls();
-    els.pageSize.value = '50';
+    els.skeleton = document.getElementById("skeleton");
+    els.errorState = document.getElementById("error-state");
+    els.sessionExpired = document.getElementById("session-expired");
+    els.emptyState = document.getElementById("empty-state");
+    els.content = document.getElementById("content");
+    els.summaryStats = document.getElementById("summary-stats");
+    els.truncationNote = document.getElementById("truncation-note");
+    els.tbody = document.getElementById("ledger-body");
+    els.listStatus = document.getElementById("list-status");
+    els.showMoreBtn = document.getElementById("show-more");
+    els.clearBtn = document.getElementById("clear-filters");
+    els.searchInput = document.getElementById("search-input");
+    els.navCount = document.getElementById("nav-count");
+    els.viewerName = document.getElementById("viewer-name");
+    els.viewerSub = document.getElementById("viewer-sub");
+    els.viewerAvatar = document.getElementById("viewer-avatar");
+    els.errorRetry = document.getElementById("error-retry");
 
-    var selects = filterSelects();
-    for (var i = 0; i < selects.length; i++) {
-      selects[i].addEventListener('change', onFilterChange);
-    }
-    els.clearFilters.addEventListener('click', clearFilters);
-    els.pageSize.addEventListener('change', onPageSizeChange);
-    els.prevPage.addEventListener('click', onPrev);
-    els.nextPage.addEventListener('click', onNext);
+    var filterSelects = ["Region", "Stage", "Product", "AE_Name", "SDR_Name"];
+    filterSelects.forEach(function (f) {
+      var sel = document.getElementById("filter-" + f);
+      if (sel) {
+        sel.addEventListener("change", function () {
+          state.filters[f] = sel.value;
+          state.visibleCount = PAGE_SIZE;
+          applyFilters();
+        });
+      }
+    });
 
+    els.searchInput.addEventListener("input", debounce(function () {
+      state.search = els.searchInput.value.trim().toLowerCase();
+      state.visibleCount = PAGE_SIZE;
+      applyFilters();
+    }, 200));
+
+    els.clearBtn.addEventListener("click", function () {
+      filterSelects.forEach(function (f) {
+        state.filters[f] = "";
+        var sel = document.getElementById("filter-" + f);
+        if (sel) sel.value = "";
+      });
+      state.search = "";
+      els.searchInput.value = "";
+      state.visibleCount = PAGE_SIZE;
+      applyFilters();
+    });
+
+    els.showMoreBtn.addEventListener("click", function () {
+      state.visibleCount += PAGE_SIZE;
+      renderTable();
+    });
+
+    document.querySelectorAll("th[data-sort-field] button").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var field = btn.closest("th").getAttribute("data-sort-field");
+        if (state.sort.field === field) {
+          state.sort.dir = state.sort.dir === "asc" ? "desc" : "asc";
+        } else {
+          state.sort.field = field;
+          state.sort.dir = field === "Company" ? "asc" : "desc";
+        }
+        updateSortIndicators();
+        applyFilters();
+      });
+    });
+
+    var retry = document.getElementById("error-retry");
+    if (retry) retry.addEventListener("click", loadData);
+
+    loadSession();
     loadData();
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
+  function debounce(fn, ms) {
+    var t;
+    return function () {
+      clearTimeout(t);
+      var args = arguments;
+      t = setTimeout(function () { fn.apply(null, args); }, ms);
+    };
+  }
+
+  function loadSession() {
+    fetch("api/session").then(function (r) {
+      if (!r.ok) return null;
+      return r.json();
+    }).then(function (data) {
+      if (data && data.name) {
+        els.viewerName.textContent = data.name;
+        els.viewerSub.textContent = data.email || "Signed in";
+        els.viewerAvatar.textContent = data.name.charAt(0).toUpperCase();
+      } else {
+        els.viewerName.textContent = "Previewing";
+        els.viewerSub.textContent = "Guest viewer";
+        els.viewerAvatar.textContent = "P";
+      }
+    }).catch(function () {
+      els.viewerName.textContent = "Previewing";
+      els.viewerSub.textContent = "Guest viewer";
+      els.viewerAvatar.textContent = "P";
+    });
+  }
+
+  function loadData() {
+    showOnly("skeleton");
+    fetch("api/sales").then(function (r) {
+      if (r.status === 401) {
+        showOnly("sessionExpired");
+        markReady();
+        throw new Error("session-expired");
+      }
+      if (!r.ok) {
+        throw new Error("load-failed");
+      }
+      return r.json();
+    }).then(function (data) {
+      state.columns = data.columns || [];
+      state.rows = normalizeRows(data.columns, data.rows || []);
+      state.truncated = !!data.truncated;
+
+      if (state.rows.length === 0) {
+        showOnly("emptyState");
+        markReady();
+        return;
+      }
+
+      buildFilterOptions();
+      showOnly("content");
+      if (state.truncated) {
+        els.truncationNote.hidden = false;
+        els.truncationNote.textContent = "Showing the first " + state.rows.length.toLocaleString() + " opportunities loaded from the dataset.";
+      } else {
+        els.truncationNote.hidden = true;
+      }
+      updateSortIndicators();
+      applyFilters();
+      markReady();
+    }).catch(function (err) {
+      if (err.message === "session-expired") return;
+      showOnly("errorState");
+      markReady();
+    });
+  }
+
+  function markReady() {
+    window.knowiReportReady = true;
+  }
+
+  function showOnly(key) {
+    var keys = ["skeleton", "errorState", "sessionExpired", "emptyState", "content"];
+    keys.forEach(function (k) {
+      if (els[k]) els[k].hidden = k !== key;
+    });
+  }
+
+  function normalizeRows(columns, rows) {
+    var iProb = columns.indexOf("Probability");
+
+    var maxProb = 0;
+    rows.forEach(function (r) {
+      var v = Number(r[iProb]);
+      if (!isNaN(v) && v > maxProb) maxProb = v;
+    });
+    var probScale = maxProb <= 1.5 ? 100 : 1;
+
+    return rows.map(function (r) {
+      var out = {};
+      columns.forEach(function (c, i) {
+        out[c] = r[i];
+      });
+      out._amount = Number(out.Amount) || 0;
+      var p = Number(out.Probability);
+      out._probability = isNaN(p) ? null : p * probScale;
+      var d = out.Created_Date ? new Date(out.Created_Date) : null;
+      out._date = d && !isNaN(d.getTime()) ? d : null;
+      return out;
+    });
+  }
+
+  function uniqueSorted(field) {
+    var set = {};
+    state.rows.forEach(function (r) {
+      var v = r[field];
+      if (v !== null && v !== undefined && v !== "") set[v] = true;
+    });
+    return Object.keys(set).sort(function (a, b) { return a.localeCompare(b); });
+  }
+
+  function buildFilterOptions() {
+    ["Region", "Stage", "Product", "AE_Name", "SDR_Name"].forEach(function (f) {
+      var sel = document.getElementById("filter-" + f);
+      if (!sel) return;
+      var values = uniqueSorted(f);
+      sel.innerHTML = "";
+      var allOpt = document.createElement("option");
+      allOpt.value = "";
+      allOpt.textContent = "All " + sel.getAttribute("data-label");
+      sel.appendChild(allOpt);
+      values.forEach(function (v) {
+        var opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      });
+    });
+  }
+
+  function applyFilters() {
+    var f = state.filters;
+    var search = state.search;
+
+    var result = state.rows.filter(function (r) {
+      if (f.Region && r.Region !== f.Region) return false;
+      if (f.Stage && r.Stage !== f.Stage) return false;
+      if (f.Product && r.Product !== f.Product) return false;
+      if (f.AE_Name && r.AE_Name !== f.AE_Name) return false;
+      if (f.SDR_Name && r.SDR_Name !== f.SDR_Name) return false;
+      if (search) {
+        var company = (r.Company || "").toString().toLowerCase();
+        var oppId = (r.Opportunity_ID || "").toString().toLowerCase();
+        if (company.indexOf(search) === -1 && oppId.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+
+    var field = state.sort.field;
+    var dir = state.sort.dir === "asc" ? 1 : -1;
+    result.sort(function (a, b) {
+      var av, bv;
+      if (field === "Amount") { av = a._amount; bv = b._amount; }
+      else if (field === "Probability") { av = a._probability || 0; bv = b._probability || 0; }
+      else if (field === "Created_Date") { av = a._date ? a._date.getTime() : 0; bv = b._date ? b._date.getTime() : 0; }
+      else { av = (a[field] || "").toString().toLowerCase(); bv = (b[field] || "").toString().toLowerCase(); }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
+
+    state.filtered = result;
+    renderSummary();
+    renderTable();
+  }
+
+  function renderSummary() {
+    var rows = state.filtered;
+    var count = rows.length;
+    var totalAmount = 0;
+    var probSum = 0;
+    var probCount = 0;
+
+    rows.forEach(function (r) {
+      totalAmount += r._amount;
+      if (r._probability !== null) {
+        probSum += r._probability;
+        probCount++;
+      }
+    });
+
+    var avgAmount = count ? totalAmount / count : 0;
+    var avgProb = probCount ? probSum / probCount : 0;
+
+    els.summaryStats.innerHTML = "";
+    addStat("Opportunities", count.toLocaleString());
+    addStat("Total amount", formatCurrency(totalAmount));
+    addStat("Average amount", formatCurrency(avgAmount));
+    addStat("Average probability", probCount ? Math.round(avgProb) + "%" : "—");
+
+    if (els.navCount) els.navCount.textContent = state.rows.length.toLocaleString();
+  }
+
+  function addStat(label, value) {
+    var wrap = document.createElement("div");
+    wrap.className = "stat";
+    var l = document.createElement("p");
+    l.className = "stat-label";
+    l.textContent = label;
+    var v = document.createElement("p");
+    v.className = "stat-value";
+    v.textContent = value;
+    wrap.appendChild(l);
+    wrap.appendChild(v);
+    els.summaryStats.appendChild(wrap);
+  }
+
+  function formatCurrency(n) {
+    if (!isFinite(n)) n = 0;
+    return "$" + Math.round(n).toLocaleString();
+  }
+
+  function formatDate(d) {
+    if (!d) return "—";
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  }
+
+  function classifyStage(stage) {
+    var s = (stage || "").toString().toLowerCase();
+    if (s.indexOf("won") !== -1) return "pill-done";
+    if (s.indexOf("lost") !== -1) return "pill-risk";
+    if (s.indexOf("negotia") !== -1 || s.indexOf("proposal") !== -1 || s.indexOf("pending") !== -1 || s.indexOf("review") !== -1) return "pill-wait";
+    return "pill-neutral";
+  }
+
+  function renderTable() {
+    var rows = state.filtered;
+    var visible = rows.slice(0, state.visibleCount);
+    els.tbody.innerHTML = "";
+
+    visible.forEach(function (r) {
+      var tr = document.createElement("tr");
+
+      tr.appendChild(td(makeCompanyCell(r)));
+      tr.appendChild(td(textNode(r.AE_Name)));
+      tr.appendChild(td(textNode(r.SDR_Name)));
+      tr.appendChild(td(textNode(r.Region)));
+      tr.appendChild(td(textNode(r.Product)));
+      tr.appendChild(td(makeStagePill(r.Stage)));
+      tr.appendChild(td(makeProbCell(r._probability)));
+      var amountTd = td(textNode(formatCurrency(r._amount)));
+      amountTd.classList.add("amount-cell");
+      tr.appendChild(amountTd);
+      tr.appendChild(td(textNode(formatDate(r._date))));
+
+      els.tbody.appendChild(tr);
+    });
+
+    els.listStatus.textContent = rows.length
+      ? "Showing " + Math.min(state.visibleCount, rows.length).toLocaleString() + " of " + rows.length.toLocaleString() + " opportunities"
+      : "No opportunities match these filters";
+
+    els.showMoreBtn.hidden = state.visibleCount >= rows.length;
+  }
+
+  function td(node) {
+    var cell = document.createElement("td");
+    cell.appendChild(node);
+    return cell;
+  }
+
+  function textNode(text) {
+    var span = document.createElement("span");
+    span.textContent = text || "—";
+    return span;
+  }
+
+  function makeCompanyCell(r) {
+    var wrap = document.createElement("span");
+    var name = document.createElement("span");
+    name.className = "cell-company";
+    name.textContent = r.Company || "Unnamed company";
+    var id = document.createElement("span");
+    id.className = "cell-id";
+    id.textContent = r.Opportunity_ID || "";
+    wrap.appendChild(name);
+    wrap.appendChild(id);
+    return wrap;
+  }
+
+  function makeStagePill(stage) {
+    var span = document.createElement("span");
+    span.className = "pill " + classifyStage(stage);
+    span.textContent = stage || "—";
+    return span;
+  }
+
+  function makeProbCell(prob) {
+    var wrap = document.createElement("span");
+    wrap.className = "prob-wrap";
+    if (prob === null || prob === undefined || isNaN(prob)) {
+      wrap.appendChild(textNode(null));
+      return wrap;
+    }
+    var pct = Math.max(0, Math.min(100, prob));
+    var track = document.createElement("span");
+    track.className = "prob-track";
+    var fill = document.createElement("span");
+    fill.className = "prob-fill";
+    fill.style.width = pct + "%";
+    track.appendChild(fill);
+    var text = document.createElement("span");
+    text.className = "prob-text";
+    text.textContent = Math.round(pct) + "%";
+    wrap.appendChild(track);
+    wrap.appendChild(text);
+    return wrap;
+  }
+
+  function updateSortIndicators() {
+    document.querySelectorAll("th[data-sort-field]").forEach(function (th) {
+      var field = th.getAttribute("data-sort-field");
+      var arrow = th.querySelector(".sort-arrow");
+      if (field === state.sort.field) {
+        arrow.textContent = state.sort.dir === "asc" ? "▲" : "▼";
+        th.setAttribute("aria-sort", state.sort.dir === "asc" ? "ascending" : "descending");
+      } else {
+        arrow.textContent = "";
+        th.removeAttribute("aria-sort");
+      }
+    });
   }
 })();
