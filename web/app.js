@@ -325,6 +325,38 @@ window.knowiReportReady = false;
     );
   }
 
+  function recordField(label, value, full) {
+    return el("div", { class: "record-field" + (full ? " full" : "") }, [
+      el("dt", { text: label }),
+      el("dd", { text: value })
+    ]);
+  }
+
+  function renderRecordCard(row) {
+    var stage = val(row, "Stage");
+    var amount = Number(val(row, "Amount"));
+    var prob = normProb(val(row, "Probability"));
+
+    return el("div", { class: "record-card" }, [
+      el("div", { class: "record-card-head" }, [
+        el("div", {}, [
+          el("div", { class: "company-cell", text: String(val(row, "Company") || "—") }),
+          el("div", { class: "sub-cell", text: String(val(row, "Opportunity_ID") || "") })
+        ]),
+        el("span", { class: "pill " + stagePillClass(stage), text: stage == null || stage === "" ? "—" : String(stage) })
+      ]),
+      el("dl", { class: "record-card-grid" }, [
+        recordField("Region", val(row, "Region") || "—"),
+        recordField("Product", val(row, "Product") || "—"),
+        recordField("Account exec", val(row, "AE_Name") || "—"),
+        recordField("SDR", val(row, "SDR_Name") || "—"),
+        recordField("Amount", isFinite(amount) ? fmtMoney(amount) : "—"),
+        recordField("Probability", prob === null ? "—" : fmtPct(prob)),
+        recordField("Created", fmtDate(val(row, "Created_Date")), true)
+      ])
+    ]);
+  }
+
   function renderTable(filteredRows) {
     var visibleRows = filteredRows.slice(0, state.visibleCount);
 
@@ -386,6 +418,8 @@ window.knowiReportReady = false;
     var table = el("table", { role: "table" }, [thead, tbody]);
     var scroll = el("div", { class: "table-scroll" }, [table]);
 
+    var cardList = el("div", { class: "card-list" }, visibleRows.map(renderRecordCard));
+
     var pager = el("div", { class: "pager" }, [
       el("span", { class: "pager-count", text: "Showing " + visibleRows.length.toLocaleString("en-US") + " of " + filteredRows.length.toLocaleString("en-US") })
     ]);
@@ -399,7 +433,7 @@ window.knowiReportReady = false;
       pager.appendChild(moreBtn);
     }
 
-    return el("section", { class: "card table-card" }, [scroll, pager]);
+    return el("section", { class: "card table-card" }, [scroll, cardList, pager]);
   }
 
   var listContainer = null;

@@ -445,6 +445,53 @@ tbody tr:hover { background: var(--canvas); }
 
 .pager-count { color: var(--muted); font-size: 13px; }
 
+/* ---------- Record cards (mobile list view) ---------- */
+.card-list {
+  display: none;
+  padding: 0 0 4px;
+}
+
+.record-card {
+  border-top: 1px solid var(--border-card);
+  padding: 14px 16px;
+}
+
+.record-card:first-child { border-top: none; }
+
+.record-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.record-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.record-field dt {
+  color: var(--muted);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 3px;
+  font-weight: 600;
+}
+
+.record-field dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 14.5px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: break-word;
+}
+
+.record-field.full { grid-column: 1 / -1; }
+
 /* ---------- States ---------- */
 .state-card {
   padding: 48px 24px;
@@ -516,9 +563,19 @@ tbody tr:hover { background: var(--canvas); }
   .stat:first-child { border-top: none; }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 600px) {
   .filter-field { min-width: 100%; }
+  .filter-field.search-field { min-width: 100%; }
   .stat { flex: 1 1 100%; }
+
+  .table-scroll { display: none; }
+  .card-list { display: block; }
+
+  .record-card-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 360px) {
+  .record-card-grid { grid-template-columns: 1fr; }
 }
 
 /* ---------- Print ---------- */
