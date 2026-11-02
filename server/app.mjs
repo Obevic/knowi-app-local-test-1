@@ -139,13 +139,23 @@ app.get("/api/tasks", async (req, res) => {
   }
   try {
     const result = await pool.query(
-      "SELECT id, title, owner, status, created_at FROM tasks ORDER BY created_at DESC, id DESC LIMIT 500"
+      "SELECT id, title, owner, status, due_date, created_at FROM tasks ORDER BY created_at DESC, id DESC LIMIT 500"
     );
     res.json({ tasks: result.rows });
   } catch {
     res.status(503).json({ error: "Database unavailable" });
   }
 });
+
+function parseDueDate(value) {
+  if (value === undefined || value === null || value === "") return { dueDate: null };
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return { error: "Due date must be a valid date." };
+  }
+  const d = new Date(value + "T00:00:00.000Z");
+  if (Number.isNaN(d.getTime())) return { error: "Due date must be a valid date." };
+  return { dueDate: d.toISOString() };
+}
 
 function validateTaskInput(body) {
   const title = typeof body.title === "string" ? body.title.trim() : "";
@@ -154,7 +164,9 @@ function validateTaskInput(body) {
   if (!title || title.length > 200) return { error: "Title is required and must be 200 characters or fewer." };
   if (!owner || owner.length > 120) return { error: "Owner is required and must be 120 characters or fewer." };
   if (!ALLOWED_STATUSES.includes(status)) return { error: "Status must be To do, In progress, or Done." };
-  return { title, owner, status };
+  const dueResult = parseDueDate(body.dueDate);
+  if (dueResult.error) return { error: dueResult.error };
+  return { title, owner, status, dueDate: dueResult.dueDate };
 }
 
 app.post("/api/tasks", async (req, res) => {
@@ -171,8 +183,8 @@ app.post("/api/tasks", async (req, res) => {
   try {
     client = await pool.connect();
     const result = await client.query(
-      "INSERT INTO tasks (title, owner, status) VALUES ($1, $2, $3) RETURNING id, title, owner, status, created_at",
-      [parsed.title, parsed.owner, parsed.status]
+      "INSERT INTO tasks (title, owner, status, due_date) VALUES ($1, $2, $3, $4) RETURNING id, title, owner, status, due_date, created_at",
+      [parsed.title, parsed.owner, parsed.status, parsed.dueDate]
     );
     res.status(201).json({ task: result.rows[0] });
   } catch {
@@ -201,8 +213,8 @@ app.put("/api/tasks/:id", async (req, res) => {
   try {
     client = await pool.connect();
     const result = await client.query(
-      "UPDATE tasks SET title = $1, owner = $2, status = $3, updated_at = NOW() WHERE id = $4 RETURNING id, title, owner, status, created_at",
-      [parsed.title, parsed.owner, parsed.status, id]
+      "UPDATE tasks SET title = $1, owner = $2, status = $3, due_date = $4, updated_at = NOW() WHERE id = $5 RETURNING id, title, owner, status, due_date, created_at",
+      [parsed.title, parsed.owner, parsed.status, parsed.dueDate, id]
     );
     if (result.rowCount === 0) {
       res.status(404).json({ error: "Task not found" });

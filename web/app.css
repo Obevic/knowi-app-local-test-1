@@ -327,7 +327,7 @@ select:focus-visible,
 table.ledger {
   width: 100%;
   border-collapse: collapse;
-  min-width: 560px;
+  min-width: 640px;
 }
 
 table.ledger thead th {
@@ -365,6 +365,20 @@ table.ledger tbody tr:last-child td {
 
 .task-owner {
   color: var(--text);
+}
+
+.task-due {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.task-due.none {
+  color: var(--muted);
+}
+
+.task-due.overdue {
+  color: var(--danger-fg);
+  font-weight: 600;
 }
 
 .status-chip {
@@ -595,7 +609,7 @@ table.ledger tbody tr:last-child td {
   }
 
   table.ledger {
-    min-width: 480px;
+    min-width: 560px;
   }
 }
 

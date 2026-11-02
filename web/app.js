@@ -43,6 +43,7 @@ window.knowiReportReady = false;
     els.titleInput = qs("task-title");
     els.ownerInput = qs("task-owner");
     els.statusSelect = qs("task-status");
+    els.dueDateInput = qs("task-due-date");
     els.formError = qs("form-error");
     els.modalCancelBtn = qs("modal-cancel-btn");
     els.modalSaveBtn = qs("modal-save-btn");
@@ -63,6 +64,27 @@ window.knowiReportReady = false;
     if (status === "Done") return "status-done";
     if (status === "In progress") return "status-progress";
     return "status-todo";
+  }
+
+  function todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function dueDateStr(dueDate) {
+    return typeof dueDate === "string" ? dueDate.slice(0, 10) : null;
+  }
+
+  function isOverdue(t) {
+    var d = dueDateStr(t.dueDate);
+    if (!d || t.status === "Done") return false;
+    return d < todayStr();
+  }
+
+  function formatDueDate(dueDate) {
+    var d = dueDateStr(dueDate);
+    if (!d) return null;
+    var parsed = new Date(d + "T00:00:00Z");
+    return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
   }
 
   function showToast(message, isError) {
@@ -134,7 +156,7 @@ window.knowiReportReady = false;
       })
       .then(function (data) {
         state.tasks = (data.tasks || []).map(function (t) {
-          return { id: t.id, title: t.title, owner: t.owner, status: t.status };
+          return { id: t.id, title: t.title, owner: t.owner, status: t.status, dueDate: t.due_date || null };
         });
         state.dbUnavailable = false;
         state.loaded = true;
@@ -159,19 +181,22 @@ window.knowiReportReady = false;
 
   function filteredTasks() {
     if (state.filter === "All") return state.tasks;
+    if (state.filter === "Overdue") return state.tasks.filter(isOverdue);
     return state.tasks.filter(function (t) { return t.status === state.filter; });
   }
 
   function renderFilterChips() {
-    var counts = { All: state.tasks.length };
+    var counts = { All: state.tasks.length, Overdue: 0 };
     STATUSES.forEach(function (s) { counts[s] = 0; });
     state.tasks.forEach(function (t) {
       if (counts.hasOwnProperty(t.status)) counts[t.status] += 1;
+      if (isOverdue(t)) counts.Overdue += 1;
     });
 
     var options = ["All"].concat(STATUSES.filter(function (s) {
       return state.tasks.some(function (t) { return t.status === s; }) || s === state.filter;
     }));
+    if (counts.Overdue > 0 || state.filter === "Overdue") options.push("Overdue");
     if (options.indexOf(state.filter) === -1) options.push(state.filter);
 
     els.filterRow.innerHTML = "";
@@ -214,6 +239,18 @@ window.knowiReportReady = false;
       chip.textContent = t.status;
       statusTd.appendChild(chip);
 
+      var dueTd = document.createElement("td");
+      var dueSpan = document.createElement("span");
+      var formattedDue = formatDueDate(t.dueDate);
+      if (!formattedDue) {
+        dueSpan.className = "task-due none";
+        dueSpan.textContent = "No due date";
+      } else {
+        dueSpan.className = "task-due" + (isOverdue(t) ? " overdue" : "");
+        dueSpan.textContent = formattedDue + (isOverdue(t) ? " (Overdue)" : "");
+      }
+      dueTd.appendChild(dueSpan);
+
       var actionsTd = document.createElement("td");
       actionsTd.className = "actions-cell";
       var actionsWrap = document.createElement("div");
@@ -240,6 +277,7 @@ window.knowiReportReady = false;
       tr.appendChild(titleTd);
       tr.appendChild(ownerTd);
       tr.appendChild(statusTd);
+      tr.appendChild(dueTd);
       tr.appendChild(actionsTd);
       els.taskRows.appendChild(tr);
     });
@@ -286,6 +324,7 @@ window.knowiReportReady = false;
     els.titleInput.value = mode === "edit" ? task.title : "";
     els.ownerInput.value = mode === "edit" ? task.owner : "";
     els.statusSelect.value = mode === "edit" ? task.status : "To do";
+    els.dueDateInput.value = mode === "edit" ? (dueDateStr(task.dueDate) || "") : "";
     els.formError.textContent = "";
     els.formError.hidden = true;
     els.modalOverlay.hidden = false;
@@ -317,6 +356,7 @@ window.knowiReportReady = false;
     var title = els.titleInput.value.trim();
     var owner = els.ownerInput.value.trim();
     var status = els.statusSelect.value;
+    var dueDate = els.dueDateInput.value ? els.dueDateInput.value.trim() : "";
 
     if (!title) {
       els.formError.textContent = "Enter a title for this task.";
@@ -341,7 +381,7 @@ window.knowiReportReady = false;
     apiFetch(url, {
       method: method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: title, owner: owner, status: status })
+      body: JSON.stringify({ title: title, owner: owner, status: status, dueDate: dueDate || null })
     })
       .then(function (res) {
         if (res.status === 503) {

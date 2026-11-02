@@ -45,7 +45,7 @@
         Your session has expired. <a href="login">Sign in again</a> to keep working on your tasks.
       </div>
 
-      <div class="filter-row" id="filter-row" role="group" aria-label="Filter by status" hidden></div>
+      <div class="filter-row" id="filter-row" role="group" aria-label="Filter tasks" hidden></div>
 
       <div id="loading-state" class="skeleton-list" aria-hidden="true">
         <div class="skeleton-row"><span class="skeleton-bar" style="width:40%"></span><span class="skeleton-bar" style="width:20%"></span><span class="skeleton-bar" style="width:15%"></span></div>
@@ -68,6 +68,7 @@
               <th scope="col">Title</th>
               <th scope="col">Owner</th>
               <th scope="col">Status</th>
+              <th scope="col">Due date</th>
               <th scope="col" class="actions-col">Actions</th>
             </tr>
           </thead>
@@ -101,6 +102,10 @@
           <option value="In progress">In progress</option>
           <option value="Done">Done</option>
         </select>
+      </div>
+      <div class="field-group">
+        <label for="task-due-date">Due date</label>
+        <input id="task-due-date" name="dueDate" type="date" autocomplete="off" />
       </div>
       <p class="field-error" id="form-error" role="alert" hidden></p>
       <div class="modal-actions">
