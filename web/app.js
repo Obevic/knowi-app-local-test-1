@@ -1,453 +1,436 @@
 window.knowiReportReady = false;
 
 (function () {
-  'use strict';
+  "use strict";
 
-  const STATUSES = ['To do', 'In progress', 'Done'];
-  const PAGE_SIZE = 50;
+  var STATUSES = ["To do", "In progress", "Done"];
+  var PAGE_SIZE = 50;
 
-  const state = {
+  var state = {
     tasks: [],
-    currentFilter: 'All',
-    editingId: null,
-    deletingId: null,
+    filter: "All",
     visibleCount: PAGE_SIZE,
-    loading: false,
-    saving: false,
+    editingId: null,
+    pendingDeleteId: null,
+    dbUnavailable: false,
+    loaded: false
   };
 
-  // ---- Element refs ----
-  const $ = (id) => document.getElementById(id);
-  const taskList = $('taskList');
-  const filterBar = $('filterBar');
-  const navCount = $('navCount');
-  const listMeta = $('listMeta');
-  const loadingState = $('loadingState');
-  const errorState = $('errorState');
-  const emptyState = $('emptyState');
-  const emptyTitle = $('emptyTitle');
-  const emptyBody = $('emptyBody');
-  const errorBody = $('errorBody');
-  const retryBtn = $('retryBtn');
-  const addBtn = $('addBtn');
-  const emptyAddBtn = $('emptyAddBtn');
+  var els = {};
 
-  const taskModal = $('taskModal');
-  const modalTitle = $('modalTitle');
-  const modalClose = $('modalClose');
-  const modalCancel = $('modalCancel');
-  const modalSave = $('modalSave');
-  const taskForm = $('taskForm');
-  const fTitle = $('fTitle');
-  const fOwner = $('fOwner');
-  const fStatus = $('fStatus');
+  function qs(id) {
+    return document.getElementById(id);
+  }
 
-  const confirmModal = $('confirmModal');
-  const confirmBody = $('confirmBody');
-  const confirmCancel = $('confirmCancel');
-  const confirmDelete = $('confirmDelete');
+  function cacheEls() {
+    els.navCount = qs("nav-count");
+    els.viewerName = qs("viewer-name");
+    els.viewerAvatar = qs("viewer-avatar");
+    els.sessionExpired = qs("session-expired");
+    els.filterRow = qs("filter-row");
+    els.loadingState = qs("loading-state");
+    els.errorState = qs("error-state");
+    els.emptyState = qs("empty-state");
+    els.listWrap = qs("list-wrap");
+    els.taskRows = qs("task-rows");
+    els.showMoreWrap = qs("show-more-wrap");
+    els.showMoreBtn = qs("show-more-btn");
+    els.addTaskBtn = qs("add-task-btn");
+    els.emptyAddBtn = qs("empty-add-btn");
+    els.modalOverlay = qs("task-modal-overlay");
+    els.modalTitle = qs("modal-title");
+    els.taskForm = qs("task-form");
+    els.titleInput = qs("task-title");
+    els.ownerInput = qs("task-owner");
+    els.statusSelect = qs("task-status");
+    els.formError = qs("form-error");
+    els.modalCancelBtn = qs("modal-cancel-btn");
+    els.modalSaveBtn = qs("modal-save-btn");
+    els.confirmOverlay = qs("confirm-delete-overlay");
+    els.confirmText = qs("confirm-text");
+    els.confirmCancelBtn = qs("confirm-cancel-btn");
+    els.confirmDeleteBtn = qs("confirm-delete-btn");
+    els.toast = qs("toast");
+  }
 
-  const toast = $('toast');
-  let toastTimer = null;
-
-  // ---- Helpers ----
   function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return String(str).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
   }
 
   function statusClass(status) {
-    if (status === 'Done') return 'st-done';
-    if (status === 'In progress') return 'st-progress';
-    return 'st-todo';
+    if (status === "Done") return "status-done";
+    if (status === "In progress") return "status-progress";
+    return "status-todo";
   }
 
-  function formatDate(value) {
-    if (!value) return '—';
-    const d = new Date(value);
-    if (isNaN(d.getTime())) return '—';
-    const opts = { year: 'numeric', month: 'short', day: 'numeric' };
-    return d.toLocaleDateString(undefined, opts);
-  }
-
-  function showToast(message, kind) {
-    if (toastTimer) clearTimeout(toastTimer);
-    toast.textContent = message;
-    toast.className = 'toast ' + (kind === 'error' ? 'toast-error' : 'toast-ok');
-    toast.hidden = false;
-    toastTimer = setTimeout(() => {
-      toast.hidden = true;
-      toast.className = 'toast';
-    }, 2600);
-  }
-
-  function setStates({ loading, error, empty }) {
-    loadingState.hidden = !loading;
-    errorState.hidden = !error;
-    emptyState.hidden = !empty;
-    taskList.hidden = loading || error || empty;
-  }
-
-  // ---- API ----
-  async function api(path, options) {
-    const opts = options || {};
-    const res = await fetch(path, {
-      method: opts.method || 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      body: opts.body ? JSON.stringify(opts.body) : undefined,
-    });
-    let data = null;
-    try {
-      data = await res.json();
-    } catch (e) {
-      data = null;
-    }
-    if (!res.ok) {
-      const msg = (data && data.error) || 'Request failed';
-      const err = new Error(msg);
-      err.status = res.status;
-      throw err;
-    }
-    return data;
-  }
-
-  // ---- Data ----
-  async function loadTasks() {
-    state.loading = true;
-    setStates({ loading: true, error: false, empty: false });
-    try {
-      const data = await api('api/tasks');
-      state.tasks = data.tasks || [];
-      state.visibleCount = PAGE_SIZE;
-      render();
-    } catch (err) {
-      if (err.status === 401) {
-        showSessionExpired();
-        return;
-      }
-      state.tasks = [];
-      setStates({ loading: false, error: true, empty: false });
-      errorBody.textContent =
-        err.status === 503
-          ? 'The task database is not available right now. Please try again in a moment.'
-          : 'Something went wrong while fetching your tasks.';
-    } finally {
-      state.loading = false;
-    }
+  function showToast(message, isError) {
+    els.toast.textContent = message;
+    els.toast.classList.toggle("toast-error", !!isError);
+    els.toast.hidden = false;
+    window.clearTimeout(els.toast._timer);
+    els.toast._timer = window.setTimeout(function () {
+      els.toast.hidden = true;
+    }, 3200);
   }
 
   function showSessionExpired() {
-    loadingState.hidden = true;
-    errorState.hidden = false;
-    emptyState.hidden = true;
-    taskList.hidden = true;
-    emptyTitle.textContent = 'Session expired';
-    emptyBody.textContent = 'Your session has ended. Please sign in again to continue.';
-    emptyAddBtn.hidden = true;
-    retryBtn.hidden = true;
-    errorBody.textContent = '';
-    // Reuse empty state for a clean sign-in prompt
-    errorState.hidden = true;
-    emptyState.hidden = false;
-    emptyTitle.textContent = 'Session expired';
-    emptyBody.textContent = 'Please sign in again to continue.';
-    emptyAddBtn.hidden = true;
-    retryBtn.hidden = true;
+    state.dbUnavailable = false;
+    els.sessionExpired.hidden = false;
+    els.loadingState.hidden = true;
+    els.errorState.hidden = true;
+    els.emptyState.hidden = true;
+    els.listWrap.hidden = true;
+    els.filterRow.hidden = true;
+    els.showMoreWrap.hidden = true;
+    els.addTaskBtn.hidden = true;
   }
 
-  // ---- Rendering ----
-  function render() {
-    renderFilter();
-    renderList();
-    renderMeta();
+  function apiFetch(url, opts) {
+    return fetch(url, opts).then(function (res) {
+      if (res.status === 401) {
+        showSessionExpired();
+        throw new Error("session-expired");
+      }
+      return res;
+    });
+  }
+
+  function loadSession() {
+    apiFetch("api/session")
+      .then(function (res) { return res.ok ? res.json() : { user: null }; })
+      .then(function (data) {
+        var user = data && data.user;
+        if (user && user.name) {
+          els.viewerName.textContent = user.name;
+          els.viewerAvatar.textContent = user.name.trim().slice(0, 1).toUpperCase();
+        } else {
+          els.viewerName.textContent = "Signed in via Knowi";
+          els.viewerAvatar.textContent = "?";
+        }
+      })
+      .catch(function () {});
+  }
+
+  function loadTasks() {
+    els.loadingState.hidden = false;
+    els.errorState.hidden = true;
+    els.emptyState.hidden = true;
+    els.listWrap.hidden = true;
+    els.filterRow.hidden = true;
+    els.showMoreWrap.hidden = true;
+
+    apiFetch("api/tasks")
+      .then(function (res) {
+        if (res.status === 503) {
+          state.dbUnavailable = true;
+          throw new Error("unavailable");
+        }
+        if (!res.ok) {
+          throw new Error("failed");
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        state.tasks = (data.tasks || []).map(function (t) {
+          return { id: t.id, title: t.title, owner: t.owner, status: t.status };
+        });
+        state.dbUnavailable = false;
+        state.loaded = true;
+        render();
+      })
+      .catch(function (err) {
+        if (err.message === "session-expired") return;
+        state.loaded = true;
+        els.loadingState.hidden = true;
+        els.errorState.hidden = false;
+        els.errorState.textContent = state.dbUnavailable
+          ? "The task database is unavailable right now. Try again in a moment."
+          : "Something went wrong loading tasks. Try again in a moment.";
+        els.navCount.textContent = "0";
+        markReportReady();
+      });
+  }
+
+  function markReportReady() {
     window.knowiReportReady = true;
   }
 
-  function renderFilter() {
-    const present = new Set(state.tasks.map((t) => t.status));
-    const options = ['All'].concat(STATUSES.filter((s) => present.has(s)));
-    // Keep current filter if it still exists, else fall back to All
-    if (!options.includes(state.currentFilter)) state.currentFilter = 'All';
-
-    filterBar.innerHTML = '';
-    options.forEach((opt) => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'chip' + (opt === state.currentFilter ? ' chip-active' : '');
-      btn.setAttribute('aria-pressed', opt === state.currentFilter ? 'true' : 'false');
-      btn.textContent = opt;
-      btn.addEventListener('click', () => {
-        state.currentFilter = opt;
-        state.visibleCount = PAGE_SIZE;
-        renderFilter();
-        renderList();
-        renderMeta();
-      });
-      filterBar.appendChild(btn);
-    });
-  }
-
   function filteredTasks() {
-    if (state.currentFilter === 'All') return state.tasks;
-    return state.tasks.filter((t) => t.status === state.currentFilter);
+    if (state.filter === "All") return state.tasks;
+    return state.tasks.filter(function (t) { return t.status === state.filter; });
   }
 
-  function renderList() {
-    const rows = filteredTasks();
-    const visible = rows.slice(0, state.visibleCount);
-
-    taskList.innerHTML = '';
-    visible.forEach((task) => {
-      const li = document.createElement('li');
-      li.className = 'ledger-row';
-
-      const title = document.createElement('span');
-      title.className = 'cell-title';
-      title.textContent = task.title;
-
-      const owner = document.createElement('span');
-      owner.className = 'cell-owner';
-      owner.textContent = task.owner || '—';
-
-      const status = document.createElement('span');
-      status.className = 'cell-status';
-      const pill = document.createElement('span');
-      pill.className = 'status-pill ' + statusClass(task.status);
-      pill.textContent = task.status;
-      status.appendChild(pill);
-
-      const date = document.createElement('span');
-      date.className = 'cell-date';
-      date.textContent = formatDate(task.created_at);
-
-      const actions = document.createElement('span');
-      actions.className = 'cell-actions';
-
-      const editBtn = document.createElement('button');
-      editBtn.type = 'button';
-      editBtn.className = 'row-btn';
-      editBtn.textContent = 'Edit';
-      editBtn.setAttribute('aria-label', 'Edit task ' + task.title);
-      editBtn.addEventListener('click', () => openEdit(task));
-
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'row-btn row-btn-danger';
-      delBtn.textContent = 'Delete';
-      delBtn.setAttribute('aria-label', 'Delete task ' + task.title);
-      delBtn.addEventListener('click', () => openDelete(task));
-
-      actions.appendChild(editBtn);
-      actions.appendChild(delBtn);
-
-      li.appendChild(title);
-      li.appendChild(owner);
-      li.appendChild(status);
-      li.appendChild(date);
-      li.appendChild(actions);
-      taskList.appendChild(li);
+  function renderFilterChips() {
+    var counts = { All: state.tasks.length };
+    STATUSES.forEach(function (s) { counts[s] = 0; });
+    state.tasks.forEach(function (t) {
+      if (counts.hasOwnProperty(t.status)) counts[t.status] += 1;
     });
 
-    // Empty state
-    if (state.tasks.length === 0) {
-      emptyTitle.textContent = 'No tasks yet';
-      emptyBody.textContent = 'Add your first task to start tracking work.';
-      emptyAddBtn.hidden = false;
-      setStates({ loading: false, error: false, empty: true });
-      return;
-    }
+    var options = ["All"].concat(STATUSES.filter(function (s) {
+      return state.tasks.some(function (t) { return t.status === s; }) || s === state.filter;
+    }));
+    if (options.indexOf(state.filter) === -1) options.push(state.filter);
 
-    if (rows.length === 0) {
-      emptyTitle.textContent = 'No tasks in this view';
-      emptyBody.textContent =
-        'There are no tasks with the status “' + state.currentFilter + '”.';
-      emptyAddBtn.hidden = true;
-      setStates({ loading: false, error: false, empty: true });
-      return;
-    }
-
-    setStates({ loading: false, error: false, empty: false });
-
-    // Show more
-    const more = document.createElement('li');
-    more.className = 'ledger-more';
-    if (rows.length > state.visibleCount) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn btn-secondary btn-sm';
-      btn.textContent = 'Show more (' + (rows.length - state.visibleCount) + ' remaining)';
-      btn.addEventListener('click', () => {
-        state.visibleCount += PAGE_SIZE;
-        renderList();
+    els.filterRow.innerHTML = "";
+    options.forEach(function (opt) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "filter-chip";
+      btn.setAttribute("aria-pressed", String(state.filter === opt));
+      btn.innerHTML = escapeHtml(opt) + ' <span class="chip-count">' + (counts[opt] || 0) + "</span>";
+      btn.addEventListener("click", function () {
+        state.filter = opt;
+        state.visibleCount = PAGE_SIZE;
+        render();
       });
-      more.appendChild(btn);
-      taskList.appendChild(more);
-    }
+      els.filterRow.appendChild(btn);
+    });
   }
 
-  function renderMeta() {
-    const total = state.tasks.length;
-    navCount.textContent = String(total);
-    const rows = filteredTasks();
-    if (state.currentFilter === 'All') {
-      listMeta.textContent = total + (total === 1 ? ' task' : ' tasks');
+  function renderRows() {
+    var list = filteredTasks();
+    var visible = list.slice(0, state.visibleCount);
+
+    els.taskRows.innerHTML = "";
+    visible.forEach(function (t) {
+      var tr = document.createElement("tr");
+
+      var titleTd = document.createElement("td");
+      var titleSpan = document.createElement("span");
+      titleSpan.className = "task-title";
+      titleSpan.textContent = t.title;
+      titleTd.appendChild(titleSpan);
+
+      var ownerTd = document.createElement("td");
+      ownerTd.className = "task-owner";
+      ownerTd.textContent = t.owner;
+
+      var statusTd = document.createElement("td");
+      var chip = document.createElement("span");
+      chip.className = "status-chip " + statusClass(t.status);
+      chip.textContent = t.status;
+      statusTd.appendChild(chip);
+
+      var actionsTd = document.createElement("td");
+      actionsTd.className = "actions-cell";
+      var actionsWrap = document.createElement("div");
+      actionsWrap.className = "row-actions";
+
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "btn-icon";
+      editBtn.setAttribute("aria-label", "Edit " + t.title);
+      editBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M11.3 2.3a1.4 1.4 0 0 1 2 2L4.8 12.8l-2.7.6.6-2.7L11.3 2.3Z" stroke="currentColor" stroke-width="1.3" fill="none"/></svg>';
+      editBtn.addEventListener("click", function () { openModal("edit", t); });
+
+      var deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "btn-icon danger";
+      deleteBtn.setAttribute("aria-label", "Delete " + t.title);
+      deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M4.5 4.5 5 13a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1l.5-8.5" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round"/></svg>';
+      deleteBtn.addEventListener("click", function () { openDeleteConfirm(t); });
+
+      actionsWrap.appendChild(editBtn);
+      actionsWrap.appendChild(deleteBtn);
+      actionsTd.appendChild(actionsWrap);
+
+      tr.appendChild(titleTd);
+      tr.appendChild(ownerTd);
+      tr.appendChild(statusTd);
+      tr.appendChild(actionsTd);
+      els.taskRows.appendChild(tr);
+    });
+
+    els.showMoreWrap.hidden = list.length <= state.visibleCount;
+  }
+
+  function render() {
+    els.loadingState.hidden = true;
+    els.errorState.hidden = true;
+
+    els.navCount.textContent = String(state.tasks.length);
+
+    if (state.tasks.length === 0) {
+      els.filterRow.hidden = true;
+      els.listWrap.hidden = true;
+      els.showMoreWrap.hidden = true;
+      els.emptyState.hidden = false;
+      markReportReady();
+      return;
+    }
+
+    els.emptyState.hidden = true;
+    els.filterRow.hidden = false;
+    renderFilterChips();
+
+    var list = filteredTasks();
+    if (list.length === 0) {
+      els.listWrap.hidden = true;
+      els.showMoreWrap.hidden = true;
     } else {
-      listMeta.textContent = rows.length + ' of ' + total;
+      els.listWrap.hidden = false;
+      renderRows();
     }
+    markReportReady();
   }
 
-  // ---- Modal: add / edit ----
-  let lastFocused = null;
+  var lastFocusedEl = null;
 
-  function openModal(overlay) {
-    lastFocused = document.activeElement;
-    overlay.hidden = false;
-    // focus first field
-    setTimeout(() => {
-      const first = overlay.querySelector('input, select, button');
-      if (first) first.focus();
-    }, 0);
+  function openModal(mode, task) {
+    lastFocusedEl = document.activeElement;
+    state.editingId = mode === "edit" ? task.id : null;
+    els.modalTitle.textContent = mode === "edit" ? "Edit task" : "Add task";
+    els.titleInput.value = mode === "edit" ? task.title : "";
+    els.ownerInput.value = mode === "edit" ? task.owner : "";
+    els.statusSelect.value = mode === "edit" ? task.status : "To do";
+    els.formError.textContent = "";
+    els.formError.hidden = true;
+    els.modalOverlay.hidden = false;
+    els.titleInput.focus();
   }
 
-  function closeModals() {
-    taskModal.hidden = true;
-    confirmModal.hidden = true;
-    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
-  }
-
-  function openAdd() {
+  function closeModal() {
+    els.modalOverlay.hidden = true;
     state.editingId = null;
-    modalTitle.textContent = 'Add task';
-    fTitle.value = '';
-    fOwner.value = '';
-    fStatus.value = 'To do';
-    modalSave.disabled = false;
-    openModal(taskModal);
+    if (lastFocusedEl) lastFocusedEl.focus();
   }
 
-  function openEdit(task) {
-    state.editingId = task.id;
-    modalTitle.textContent = 'Edit task';
-    fTitle.value = task.title;
-    fOwner.value = task.owner;
-    fStatus.value = task.status;
-    modalSave.disabled = false;
-    openModal(taskModal);
+  function openDeleteConfirm(task) {
+    lastFocusedEl = document.activeElement;
+    state.pendingDeleteId = task.id;
+    els.confirmText.textContent = 'Delete "' + task.title + '"? This can’t be undone.';
+    els.confirmOverlay.hidden = false;
+    els.confirmCancelBtn.focus();
   }
 
-  async function saveTask(e) {
+  function closeDeleteConfirm() {
+    els.confirmOverlay.hidden = true;
+    state.pendingDeleteId = null;
+    if (lastFocusedEl) lastFocusedEl.focus();
+  }
+
+  function submitForm(e) {
     e.preventDefault();
-    if (state.saving) return;
-    const title = fTitle.value.trim();
-    const owner = fOwner.value.trim();
-    const status = fStatus.value;
+    var title = els.titleInput.value.trim();
+    var owner = els.ownerInput.value.trim();
+    var status = els.statusSelect.value;
 
     if (!title) {
-      fTitle.focus();
-      showToast('Title is required', 'error');
+      els.formError.textContent = "Enter a title for this task.";
+      els.formError.hidden = false;
+      els.titleInput.focus();
       return;
     }
     if (!owner) {
-      fOwner.focus();
-      showToast('Owner is required', 'error');
+      els.formError.textContent = "Enter who owns this task.";
+      els.formError.hidden = false;
+      els.ownerInput.focus();
       return;
     }
 
-    state.saving = true;
-    modalSave.disabled = true;
-    try {
-      if (state.editingId === null) {
-        const data = await api('api/tasks', {
-          method: 'POST',
-          body: { title, owner, status },
-        });
-        state.tasks.unshift(data.task);
-        showToast('Task added');
-      } else {
-        const data = await api('api/tasks/' + state.editingId, {
-          method: 'PATCH',
-          body: { title, owner, status },
-        });
-        const idx = state.tasks.findIndex((t) => t.id === state.editingId);
-        if (idx !== -1) state.tasks[idx] = data.task;
-        showToast('Task updated');
-      }
-      closeModals();
-      state.visibleCount = PAGE_SIZE;
-      render();
-    } catch (err) {
-      if (err.status === 401) {
-        closeModals();
-        showSessionExpired();
-        return;
-      }
-      showToast(err.message || 'Could not save task', 'error');
-    } finally {
-      state.saving = false;
-      modalSave.disabled = false;
-    }
+    els.formError.hidden = true;
+    els.modalSaveBtn.disabled = true;
+
+    var isEdit = state.editingId !== null;
+    var url = isEdit ? "api/tasks/" + state.editingId : "api/tasks";
+    var method = isEdit ? "PUT" : "POST";
+
+    apiFetch(url, {
+      method: method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: title, owner: owner, status: status })
+    })
+      .then(function (res) {
+        if (res.status === 503) {
+          showToast("The task database is unavailable right now. Try again shortly.", true);
+          return null;
+        }
+        if (!res.ok) {
+          return res.json().then(function (d) {
+            throw new Error((d && d.error) || "Save failed");
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        closeModal();
+        showToast(isEdit ? "Task updated." : "Task added.", false);
+        loadTasks();
+      })
+      .catch(function (err) {
+        if (err.message === "session-expired") return;
+        els.formError.textContent = err.message || "Couldn’t save this task. Try again.";
+        els.formError.hidden = false;
+      })
+      .finally(function () {
+        els.modalSaveBtn.disabled = false;
+      });
   }
 
-  // ---- Delete ----
-  function openDelete(task) {
-    state.deletingId = task.id;
-    confirmBody.textContent =
-      'Delete “' + task.title + '”? This can’t be undone.';
-    openModal(confirmModal);
+  function confirmDelete() {
+    if (state.pendingDeleteId === null) return;
+    els.confirmDeleteBtn.disabled = true;
+    apiFetch("api/tasks/" + state.pendingDeleteId, { method: "DELETE" })
+      .then(function (res) {
+        if (res.status === 503) {
+          showToast("The task database is unavailable right now. Try again shortly.", true);
+          return;
+        }
+        if (!res.ok && res.status !== 204) {
+          throw new Error("Delete failed");
+        }
+        closeDeleteConfirm();
+        showToast("Task deleted.", false);
+        loadTasks();
+      })
+      .catch(function (err) {
+        if (err.message === "session-expired") return;
+        showToast("Couldn’t delete this task. Try again.", true);
+      })
+      .finally(function () {
+        els.confirmDeleteBtn.disabled = false;
+      });
   }
 
-  async function doDelete() {
-    if (state.deletingId === null) return;
-    const id = state.deletingId;
-    confirmDelete.disabled = true;
-    try {
-      await api('api/tasks/' + id, { method: 'DELETE' });
-      state.tasks = state.tasks.filter((t) => t.id !== id);
-      state.deletingId = null;
-      closeModals();
-      showToast('Task deleted');
-      render();
-    } catch (err) {
-      if (err.status === 401) {
-        closeModals();
-        showSessionExpired();
-        return;
-      }
-      showToast(err.message || 'Could not delete task', 'error');
-    } finally {
-      confirmDelete.disabled = false;
-    }
-  }
-
-  // ---- Wire up ----
-  addBtn.addEventListener('click', openAdd);
-  emptyAddBtn.addEventListener('click', openAdd);
-  retryBtn.addEventListener('click', loadTasks);
-  modalClose.addEventListener('click', closeModals);
-  modalCancel.addEventListener('click', closeModals);
-  taskForm.addEventListener('submit', saveTask);
-  confirmCancel.addEventListener('click', closeModals);
-  confirmDelete.addEventListener('click', doDelete);
-
-  // Close on overlay click
-  [taskModal, confirmModal].forEach((overlay) => {
-    overlay.addEventListener('mousedown', (e) => {
-      if (e.target === overlay) closeModals();
+  function bindEvents() {
+    els.addTaskBtn.addEventListener("click", function () { openModal("add"); });
+    els.emptyAddBtn.addEventListener("click", function () { openModal("add"); });
+    els.modalCancelBtn.addEventListener("click", closeModal);
+    els.taskForm.addEventListener("submit", submitForm);
+    els.confirmCancelBtn.addEventListener("click", closeDeleteConfirm);
+    els.confirmDeleteBtn.addEventListener("click", confirmDelete);
+    els.showMoreBtn.addEventListener("click", function () {
+      state.visibleCount += PAGE_SIZE;
+      renderRows();
     });
-  });
 
-  // Escape to close
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (!taskModal.hidden || !confirmModal.hidden) closeModals();
-    }
-  });
+    [els.modalOverlay, els.confirmOverlay].forEach(function (overlay) {
+      overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) {
+          if (overlay === els.modalOverlay) closeModal();
+          else closeDeleteConfirm();
+        }
+      });
+    });
 
-  // ---- Init ----
-  loadTasks();
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        if (!els.modalOverlay.hidden) closeModal();
+        if (!els.confirmOverlay.hidden) closeDeleteConfirm();
+      }
+    });
+  }
+
+  function init() {
+    cacheEls();
+    bindEvents();
+    loadSession();
+    loadTasks();
+  }
+
+  document.addEventListener("DOMContentLoaded", init);
 })();
