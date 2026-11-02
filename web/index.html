@@ -1,13 +1,154 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Opportunity Ledger</title>
-  <link rel="stylesheet" href="app.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Tracker</title>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <div id="app"></div>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-logo">
+        <svg class="logo-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="3" y="3" width="18" height="18" rx="4" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+          <path d="M8 12.5l2.6 2.6L16 9.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <span class="logo-text">Task Tracker</span>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Primary">
+        <a href="#" class="nav-link active" aria-current="page">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M9 6h11M9 12h11M9 18h11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+            <circle cx="4.5" cy="6" r="1.4" fill="currentColor"></circle>
+            <circle cx="4.5" cy="12" r="1.4" fill="currentColor"></circle>
+            <circle cx="4.5" cy="18" r="1.4" fill="currentColor"></circle>
+          </svg>
+          <span class="nav-label">Tasks</span>
+          <span class="count-pill" id="task-count" aria-label="Total tasks">0</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="viewer" class="viewer">
+          <span class="viewer-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <circle cx="12" cy="9" r="3.4" fill="currentColor"></circle>
+              <path d="M5 19c0-3.3 3.1-5.4 7-5.4s7 2.1 7 5.4" fill="currentColor"></path>
+            </svg>
+          </span>
+          <span class="viewer-name" id="viewer-name">Guest</span>
+        </div>
+      </div>
+    </aside>
+
+    <main id="main">
+      <header class="page-head">
+        <h1 id="page-title" class="page-title">Tasks</h1>
+        <p class="page-sub">Add, edit and track the work your team is on.</p>
+      </header>
+
+      <section class="card add-card" aria-labelledby="add-heading">
+        <h2 id="add-heading" class="card-title">Add a task</h2>
+        <form id="add-form" class="add-form" novalidate>
+          <div class="field">
+            <label class="field-label" for="new-title">Title</label>
+            <input class="input" id="new-title" name="title" type="text" maxlength="200" placeholder="What needs to be done?" required autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="field-label" for="new-owner">Owner</label>
+            <input class="input" id="new-owner" name="owner" type="text" maxlength="120" placeholder="Who is responsible?" autocomplete="off">
+          </div>
+          <div class="field">
+            <label class="field-label" for="new-status">Status</label>
+            <select class="input select" id="new-status" name="status">
+              <option value="To do">To do</option>
+              <option value="In progress">In progress</option>
+              <option value="Done">Done</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" type="submit" id="add-submit">Add task</button>
+        </form>
+      </section>
+
+      <section class="card list-card" aria-labelledby="list-heading">
+        <div class="list-head">
+          <h2 id="list-heading" class="card-title">All tasks</h2>
+          <div id="filter-bar" class="filter-bar">
+            <label class="filter-label" for="status-filter">Filter by status</label>
+            <select class="input select select-sm" id="status-filter" aria-label="Filter tasks by status">
+              <option value="All">All</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="loading" class="loading" hidden>
+          <div class="skeleton-row"><span class="sk sk-name"></span><span class="sk sk-owner"></span><span class="sk sk-pill"></span><span class="sk sk-date"></span></div>
+          <div class="skeleton-row"><span class="sk sk-name"></span><span class="sk sk-owner"></span><span class="sk sk-pill"></span><span class="sk sk-date"></span></div>
+          <div class="skeleton-row"><span class="sk sk-name"></span><span class="sk sk-owner"></span><span class="sk sk-pill"></span><span class="sk sk-date"></span></div>
+          <div class="skeleton-row"><span class="sk sk-name"></span><span class="sk sk-owner"></span><span class="sk sk-pill"></span><span class="sk sk-date"></span></div>
+          <div class="skeleton-row"><span class="sk sk-name"></span><span class="sk sk-owner"></span><span class="sk sk-pill"></span><span class="sk sk-date"></span></div>
+        </div>
+
+        <div id="error-state" class="state error-state" hidden>
+          <svg class="state-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
+            <path d="M12 7v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            <circle cx="12" cy="16.5" r="1.1" fill="currentColor"></circle>
+          </svg>
+          <p class="state-title">Something went wrong</p>
+          <p class="state-body" id="error-message">We couldn't load your tasks. Please try again.</p>
+          <button class="btn btn-secondary" type="button" id="retry-btn">Try again</button>
+        </div>
+
+        <div id="empty-state" class="state empty-state" hidden>
+          <svg class="state-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="4" y="4" width="16" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.5"></rect>
+            <path d="M8 12h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+          </svg>
+          <p class="state-title">No tasks yet</p>
+          <p class="state-body">Add your first task above to start tracking work.</p>
+        </div>
+
+        <div id="task-list" class="task-list" role="list" aria-label="Tasks"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div id="task-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 class="modal-title" id="modal-title">Edit task</h2>
+      <form id="edit-form" class="edit-form" novalidate>
+        <div class="field">
+          <label class="field-label" for="edit-title">Title</label>
+          <input class="input" id="edit-title" name="title" type="text" maxlength="200" required autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="field-label" for="edit-owner">Owner</label>
+          <input class="input" id="edit-owner" name="owner" type="text" maxlength="120" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="field-label" for="edit-status">Status</label>
+          <select class="input select" id="edit-status" name="status">
+            <option value="To do">To do</option>
+            <option value="In progress">In progress</option>
+            <option value="Done">Done</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-danger" type="button" id="modal-delete">Delete</button>
+          <div class="modal-actions-right">
+            <button class="btn btn-secondary" type="button" id="modal-cancel">Cancel</button>
+            <button class="btn btn-primary" type="submit" id="modal-save">Save changes</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
   <script src="app.js"></script>
 </body>
 </html>
