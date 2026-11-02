@@ -3,308 +3,386 @@ window.knowiReportReady = false;
 (function () {
   'use strict';
 
-  var PAGE_SIZE = 50;
+  var COLUMNS = [
+    'AE_Name',
+    'Amount',
+    'Company',
+    'Created_Date',
+    'Opportunity_ID',
+    'Probability',
+    'Product',
+    'Region',
+    'SDR_Name',
+    'Stage'
+  ];
 
-  var els = {
-    form: document.getElementById('calcForm'),
-    loanAmount: document.getElementById('loanAmount'),
-    interestRate: document.getElementById('interestRate'),
-    termYears: document.getElementById('termYears'),
-    calcBtn: document.getElementById('calcBtn'),
-    resetBtn: document.getElementById('resetBtn'),
-    formError: document.getElementById('formError'),
-    resultsCard: document.getElementById('resultsCard'),
-    chartCard: document.getElementById('chartCard'),
-    tableCard: document.getElementById('tableCard'),
-    monthlyPayment: document.getElementById('monthlyPayment'),
-    totalPaid: document.getElementById('totalPaid'),
-    totalInterest: document.getElementById('totalInterest'),
-    totalPayments: document.getElementById('totalPayments'),
-    balanceChart: document.getElementById('balanceChart'),
-    amortBody: document.getElementById('amortBody'),
-    prevPage: document.getElementById('prevPage'),
-    nextPage: document.getElementById('nextPage'),
-    pageInfo: document.getElementById('pageInfo'),
-    showMore: document.getElementById('showMore'),
-    navCount: document.getElementById('navCount')
-  };
+  var FILTER_FIELDS = ['Stage', 'Region', 'Product', 'AE_Name', 'SDR_Name', 'Company'];
 
   var state = {
+    columns: [],
     rows: [],
-    payment: 0,
-    totalPaid: 0,
-    totalInterest: 0,
-    n: 0,
-    P: 0,
+    filtered: [],
+    filterValues: {},
     page: 1,
-    pageSize: PAGE_SIZE
+    pageSize: 50,
+    loading: false,
+    loaded: false
   };
 
-  function fmtMoney(v) {
-    return '$' + Number(v).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  var els = {};
+
+  function $(id) {
+    return document.getElementById(id);
   }
 
-  function fmtInt(v) {
-    return Number(v).toLocaleString('en-US');
+  function cacheEls() {
+    els.app = $('app');
+    els.sidebar = $('sidebar');
+    els.navCount = $('nav-count');
+    els.viewerName = $('viewer-name');
+    els.summary = $('summary');
+    els.statCount = $('stat-count');
+    els.statTotal = $('stat-total');
+    els.statAvgAmount = $('stat-avg-amount');
+    els.statAvgProb = $('stat-avg-prob');
+    els.filters = $('filters');
+    els.clearFilters = $('clear-filters');
+    els.tableWrap = $('table-wrap');
+    els.ledger = $('ledger');
+    els.ledgerBody = $('ledger-body');
+    els.pager = $('pager');
+    els.pageSize = $('page-size');
+    els.prevPage = $('prev-page');
+    els.nextPage = $('next-page');
+    els.showing = $('showing');
+    els.loading = $('loading');
+    els.empty = $('empty');
+    els.error = $('error');
+    els.sessionExpired = $('session-expired');
+    els.loginLink = $('login-link');
   }
 
-  function esc(s) {
-    return String(s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
+  function filterSelects() {
+    return Array.prototype.slice.call(document.querySelectorAll('.filter-select[data-field]'));
   }
 
-  function compute() {
-    var P = parseFloat(els.loanAmount.value);
-    var rate = parseFloat(els.interestRate.value);
-    var years = parseFloat(els.termYears.value);
+  function setStates() {
+    var showLoading = state.loading;
+    var showSession = els.sessionExpired && !els.sessionExpired.hidden;
+    var showEmpty = !state.loading && !showSession && state.loaded && state.filtered.length === 0;
+    var showData = !state.loading && !showSession && state.loaded && state.filtered.length > 0;
 
-    if (isNaN(P) || P <= 0) {
-      return { error: 'Enter a loan amount greater than zero.' };
-    }
-    if (isNaN(rate) || rate < 0) {
-      return { error: 'Enter an annual interest rate of zero or more.' };
-    }
-    if (isNaN(years) || years <= 0) {
-      return { error: 'Enter a term of at least one year.' };
-    }
+    els.loading.hidden = !showLoading;
+    els.sessionExpired.hidden = !showSession;
+    els.empty.hidden = !showEmpty;
+    els.error.hidden = !(state.error && !showLoading && !showSession);
 
-    var n = Math.round(years * 12);
-    var r = rate / 1200;
-    var payment;
+    var showContent = showData || showEmpty;
+    els.summary.hidden = !showContent;
+    els.filters.hidden = !showContent;
+    els.tableWrap.hidden = !showData;
+    els.pager.hidden = !showData;
+  }
 
-    if (r === 0) {
-      payment = P / n;
-    } else {
-      var factor = Math.pow(1 + r, n);
-      payment = (P * r * factor) / (factor - 1);
+  function fmtInt(n) {
+    return Math.round(n).toLocaleString('en-US');
+  }
+
+  function fmtMoney(n) {
+    return '$' + Math.round(n).toLocaleString('en-US');
+  }
+
+  function fmtDate(v) {
+    if (v === null || v === undefined || v === '') return '—';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return String(v);
+    var m = d.getMonth() + 1;
+    var day = d.getDate();
+    return d.getFullYear() + '-' + (m < 10 ? '0' + m : m) + '-' + (day < 10 ? '0' + day : day);
+  }
+
+  function stageClass(stage) {
+    var s = String(stage || '').toLowerCase();
+    if (s.indexOf('won') !== -1 || s.indexOf('closed') !== -1 || s.indexOf('done') !== -1 || s.indexOf('complete') !== -1) {
+      return 'stage-done';
     }
+    if (s.indexOf('lost') !== -1 || s.indexOf('miss') !== -1 || s.indexOf('risk') !== -1 || s.indexOf('cancel') !== -1) {
+      return 'stage-risk';
+    }
+    if (s.indexOf('late') !== -1 || s.indexOf('due') !== -1 || s.indexOf('overdue') !== -1 || s.indexOf('pending') !== -1) {
+      return 'stage-late';
+    }
+    if (s.indexOf('wait') !== -1 || s.indexOf('hold') !== -1 || s.indexOf('review') !== -1 || s.indexOf('approv') !== -1) {
+      return 'stage-wait';
+    }
+    return 'stage-neutral';
+  }
 
-    var rows = [];
-    var balance = P;
-    for (var m = 1; m <= n; m++) {
-      var interest = balance * r;
-      var principal = payment - interest;
-      balance -= principal;
-      if (m === n) {
-        balance = 0;
-        principal = payment - interest;
+  function updateSummary() {
+    var rows = state.filtered;
+    var count = rows.length;
+    var total = 0;
+    var probSum = 0;
+    var probCount = 0;
+    var amountCount = 0;
+
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var amt = Number(r.Amount);
+      if (!isNaN(amt)) {
+        total += amt;
+        amountCount++;
       }
-      if (balance < 0) balance = 0;
-      rows.push({
-        month: m,
-        payment: payment,
-        principal: principal,
-        interest: interest,
-        balance: balance
-      });
+      var prob = Number(r.Probability);
+      if (!isNaN(prob)) {
+        probSum += prob;
+        probCount++;
+      }
     }
 
-    var totalPaid = payment * n;
-    var totalInterest = totalPaid - P;
+    var avgAmount = amountCount ? total / amountCount : 0;
+    var avgProb = probCount ? probSum / probCount : 0;
 
-    return {
-      P: P,
-      rate: rate,
-      years: years,
-      n: n,
-      payment: payment,
-      rows: rows,
-      totalPaid: totalPaid,
-      totalInterest: totalInterest
-    };
+    els.statCount.textContent = fmtInt(count);
+    els.statTotal.textContent = fmtMoney(total);
+    els.statAvgAmount.textContent = fmtMoney(avgAmount);
+    els.statAvgProb.textContent = (avgProb * 100).toFixed(1) + '%';
   }
 
-  function renderResults(res) {
-    els.monthlyPayment.textContent = fmtMoney(res.payment);
-    els.totalPaid.textContent = fmtMoney(res.totalPaid);
-    els.totalInterest.textContent = fmtMoney(res.totalInterest);
-    els.totalPayments.textContent = fmtInt(res.n);
-    els.resultsCard.hidden = false;
-  }
-
-  function renderTable(res) {
-    var rows = res.rows;
-    var total = rows.length;
-    var maxPage = Math.max(1, Math.ceil(total / state.pageSize));
-    if (state.page > maxPage) state.page = maxPage;
-    if (state.page < 1) state.page = 1;
-
+  function renderTable() {
     var start = (state.page - 1) * state.pageSize;
-    var end = Math.min(start + state.pageSize, total);
+    var end = Math.min(start + state.pageSize, state.filtered.length);
+    var slice = state.filtered.slice(start, end);
 
     var html = '';
-    for (var i = start; i < end; i++) {
-      var row = rows[i];
+    for (var i = 0; i < slice.length; i++) {
+      var r = slice[i];
+      var stage = r.Stage == null ? '' : String(r.Stage);
+      var stageCell = stage
+        ? '<span class="stage-pill ' + stageClass(stage) + '">' + escapeHtml(stage) + '</span>'
+        : '<span class="stage-pill stage-empty">—</span>';
+      var amt = Number(r.Amount);
+      var prob = Number(r.Probability);
+
       html +=
         '<tr>' +
-        '<td class="num">' + row.month + '</td>' +
-        '<td class="num">' + fmtMoney(row.payment) + '</td>' +
-        '<td class="num">' + fmtMoney(row.principal) + '</td>' +
-        '<td class="num">' + fmtMoney(row.interest) + '</td>' +
-        '<td class="num">' + fmtMoney(row.balance) + '</td>' +
+        '<td class="cell-id">' + escapeHtml(r.Opportunity_ID == null ? '' : String(r.Opportunity_ID)) + '</td>' +
+        '<td class="cell-company">' + escapeHtml(r.Company == null ? '' : String(r.Company)) + '</td>' +
+        '<td>' + escapeHtml(r.Product == null ? '' : String(r.Product)) + '</td>' +
+        '<td>' + stageCell + '</td>' +
+        '<td>' + escapeHtml(r.Region == null ? '' : String(r.Region)) + '</td>' +
+        '<td>' + escapeHtml(r.AE_Name == null ? '' : String(r.AE_Name)) + '</td>' +
+        '<td>' + escapeHtml(r.SDR_Name == null ? '' : String(r.SDR_Name)) + '</td>' +
+        '<td class="num">' + (isNaN(amt) ? '—' : fmtMoney(amt)) + '</td>' +
+        '<td class="num">' + (isNaN(prob) ? '—' : (prob * 100).toFixed(0) + '%') + '</td>' +
+        '<td class="cell-date">' + fmtDate(r.Created_Date) + '</td>' +
         '</tr>';
     }
-    els.amortBody.innerHTML = html;
+    els.ledgerBody.innerHTML = html;
+  }
 
-    els.pageInfo.textContent = 'Page ' + state.page + ' of ' + maxPage;
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function updatePager() {
+    var total = state.filtered.length;
+    var start = total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
+    var end = Math.min(state.page * state.pageSize, total);
+    els.showing.textContent = 'Showing ' + start + '–' + end + ' of ' + total;
+
+    var maxPage = Math.max(1, Math.ceil(total / state.pageSize));
     els.prevPage.disabled = state.page <= 1;
     els.nextPage.disabled = state.page >= maxPage;
-    els.showMore.hidden = state.page >= maxPage;
-    els.tableCard.hidden = false;
   }
 
-  function renderChart(res) {
-    var svg = els.balanceChart;
-    var W = 720, H = 340;
-    var m = { t: 20, r: 24, b: 46, l: 72 };
-    var plotW = W - m.l - m.r;
-    var plotH = H - m.t - m.b;
-    var x0 = m.l, y0 = m.t, y1 = m.t + plotH;
-    var maxBal = res.P;
-    var n = res.n;
-
-    function xPos(i) {
-      if (n <= 1) return x0;
-      return x0 + (i / n) * plotW;
+  function applyFilters() {
+    var rows = state.rows;
+    var out = [];
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var ok = true;
+      for (var j = 0; j < FILTER_FIELDS.length; j++) {
+        var f = FILTER_FIELDS[j];
+        var val = state.filterValues[f];
+        if (val) {
+          var cell = r[f] == null ? '' : String(r[f]);
+          if (cell !== val) {
+            ok = false;
+            break;
+          }
+        }
+      }
+      if (ok) out.push(r);
     }
-    function yPos(v) {
-      if (maxBal <= 0) return y1;
-      return y1 - (v / maxBal) * plotH;
-    }
-
-    var parts = [];
-
-    // Gridlines + y labels
-    var yTicks = 5;
-    for (var t = 0; t <= yTicks; t++) {
-      var val = (maxBal / yTicks) * t;
-      var y = yPos(val);
-      parts.push('<line x1="' + x0 + '" y1="' + y.toFixed(1) + '" x2="' + (x0 + plotW) + '" y2="' + y.toFixed(1) + '" stroke="#E4EBEB" stroke-width="1"></line>');
-      parts.push('<text x="' + (x0 - 10) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">$' + fmtInt(Math.round(val)) + '</text>');
-    }
-
-    // X labels (years)
-    var years = res.years;
-    var xTicks = Math.min(6, Math.max(1, Math.round(years)));
-    for (var k = 0; k <= xTicks; k++) {
-      var yr = (years / xTicks) * k;
-      var idx = Math.round(yr * 12);
-      var x = xPos(idx);
-      parts.push('<line x1="' + x.toFixed(1) + '" y1="' + y1 + '" x2="' + x.toFixed(1) + '" y2="' + (y1 + 5) + '" stroke="#C7D2D3" stroke-width="1"></line>');
-      parts.push('<text x="' + x.toFixed(1) + '" y="' + (y1 + 22) + '" text-anchor="middle" font-size="11" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">' + Math.round(yr) + '</text>');
-    }
-
-    // Axis lines
-    parts.push('<line x1="' + x0 + '" y1="' + y0 + '" x2="' + x0 + '" y2="' + y1 + '" stroke="#C7D2D3" stroke-width="1"></line>');
-    parts.push('<line x1="' + x0 + '" y1="' + y1 + '" x2="' + (x0 + plotW) + '" y2="' + y1 + '" stroke="#C7D2D3" stroke-width="1"></line>');
-
-    // Axis titles
-    parts.push('<text x="' + (x0 + plotW / 2) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="12" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">Years</text>');
-    parts.push('<text x="16" y="' + (m.t + plotH / 2) + '" text-anchor="middle" font-size="12" fill="#56666D" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" transform="rotate(-90 16 ' + (m.t + plotH / 2) + ')">Balance</text>');
-
-    // Build line + area points
-    var linePts = [];
-    var step = Math.max(1, Math.floor(n / 240));
-    for (var i = 0; i < n; i += step) {
-      linePts.push(xPos(i).toFixed(1) + ',' + yPos(res.rows[i].balance).toFixed(1));
-    }
-    // ensure last point
-    linePts.push(xPos(n).toFixed(1) + ',' + yPos(0).toFixed(1));
-
-    var lineStr = linePts.join(' ');
-    var areaStr = x0 + ',' + y1 + ' ' + lineStr + ' ' + (x0 + plotW) + ',' + y1;
-
-    parts.push('<polygon points="' + areaStr + '" fill="#4E6E78" fill-opacity="0.12"></polygon>');
-    parts.push('<polyline points="' + lineStr + '" fill="none" stroke="#4E6E78" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"></polyline>');
-
-    // End marker
-    parts.push('<circle cx="' + xPos(n).toFixed(1) + '" cy="' + yPos(0).toFixed(1) + '" r="3" fill="#4E6E78"></circle>');
-
-    svg.innerHTML = parts.join('');
-    els.chartCard.hidden = false;
-  }
-
-  function updateNavCount() {
-    els.navCount.textContent = state.rows.length ? fmtInt(state.rows.length) : '0';
-  }
-
-  function showError(msg) {
-    if (msg) {
-      els.formError.textContent = msg;
-      els.formError.hidden = false;
-    } else {
-      els.formError.textContent = '';
-      els.formError.hidden = true;
-    }
-  }
-
-  function calculate() {
-    var res = compute();
-    if (res.error) {
-      showError(res.error);
-      return;
-    }
-    showError('');
-    state.rows = res.rows;
-    state.payment = res.payment;
-    state.totalPaid = res.totalPaid;
-    state.totalInterest = res.totalInterest;
-    state.n = res.n;
-    state.P = res.P;
+    state.filtered = out;
     state.page = 1;
-
-    renderResults(res);
-    renderChart(res);
-    renderTable(res);
-    updateNavCount();
-
-    window.knowiReportReady = true;
+    updateSummary();
+    renderTable();
+    updatePager();
+    setStates();
   }
 
-  function reset() {
-    els.loanAmount.value = '250000';
-    els.interestRate.value = '6.5';
-    els.termYears.value = '30';
-    showError('');
-    els.resultsCard.hidden = true;
-    els.chartCard.hidden = true;
-    els.tableCard.hidden = true;
-    els.amortBody.innerHTML = '';
-    els.balanceChart.innerHTML = '';
-    state.rows = [];
+  function buildFilterOptions() {
+    var selects = filterSelects();
+    for (var i = 0; i < selects.length; i++) {
+      var sel = selects[i];
+      var field = sel.getAttribute('data-field');
+      var values = uniqueValues(field);
+      var current = state.filterValues[field] || '';
+      var html = '<option value="">All</option>';
+      for (var j = 0; j < values.length; j++) {
+        var v = values[j];
+        html += '<option value="' + escapeHtml(v) + '"' + (v === current ? ' selected' : '') + '>' + escapeHtml(v) + '</option>';
+      }
+      sel.innerHTML = html;
+    }
+  }
+
+  function uniqueValues(field) {
+    var seen = {};
+    var out = [];
+    for (var i = 0; i < state.rows.length; i++) {
+      var v = state.rows[i][field];
+      if (v === null || v === undefined || v === '') continue;
+      var key = String(v);
+      if (!seen[key]) {
+        seen[key] = true;
+        out.push(key);
+      }
+    }
+    out.sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    return out;
+  }
+
+  function showSessionExpired() {
+    state.loading = false;
+    state.loaded = false;
+    els.sessionExpired.hidden = false;
+    els.loading.hidden = true;
+    els.empty.hidden = true;
+    els.error.hidden = true;
+    els.summary.hidden = true;
+    els.filters.hidden = true;
+    els.tableWrap.hidden = true;
+    els.pager.hidden = true;
+  }
+
+  function showError() {
+    state.loading = false;
+    state.loaded = false;
+    state.error = true;
+    els.error.hidden = false;
+    els.loading.hidden = true;
+    els.empty.hidden = true;
+    els.sessionExpired.hidden = true;
+    els.summary.hidden = true;
+    els.filters.hidden = true;
+    els.tableWrap.hidden = true;
+    els.pager.hidden = true;
+  }
+
+  function loadData() {
+    state.loading = true;
+    state.error = false;
+    setStates();
+    return fetch('api/opportunities', { headers: { Accept: 'application/json' } })
+      .then(function (res) {
+        if (res.status === 401) {
+          showSessionExpired();
+          return;
+        }
+        if (!res.ok) throw new Error('bad status');
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data) return;
+        state.columns = data.columns || COLUMNS;
+        state.rows = (data.rows || []).map(function (row) {
+          var obj = {};
+          for (var i = 0; i < state.columns.length; i++) {
+            obj[state.columns[i]] = row[i];
+          }
+          return obj;
+        });
+        state.loaded = true;
+        state.loading = false;
+        els.navCount.textContent = fmtInt(state.rows.length);
+        buildFilterOptions();
+        applyFilters();
+        window.knowiReportReady = true;
+      })
+      .catch(function () {
+        showError();
+      });
+  }
+
+  function onFilterChange(e) {
+    var field = e.target.getAttribute('data-field');
+    if (!field) return;
+    state.filterValues[field] = e.target.value;
+    applyFilters();
+  }
+
+  function clearFilters() {
+    var selects = filterSelects();
+    for (var i = 0; i < selects.length; i++) {
+      selects[i].value = '';
+      state.filterValues[selects[i].getAttribute('data-field')] = '';
+    }
+    applyFilters();
+  }
+
+  function onPageSizeChange(e) {
+    state.pageSize = parseInt(e.target.value, 10) || 50;
     state.page = 1;
-    updateNavCount();
-    window.knowiReportReady = true;
+    renderTable();
+    updatePager();
   }
 
-  function goPage(delta) {
-    var maxPage = Math.max(1, Math.ceil(state.rows.length / state.pageSize));
-    var next = state.page + delta;
-    if (next < 1) next = 1;
-    if (next > maxPage) next = maxPage;
-    state.page = next;
-    renderTable({ rows: state.rows });
+  function onPrev() {
+    if (state.page > 1) {
+      state.page--;
+      renderTable();
+      updatePager();
+    }
   }
 
-  function showMore() {
-    state.pageSize += PAGE_SIZE;
-    renderTable({ rows: state.rows });
+  function onNext() {
+    var maxPage = Math.max(1, Math.ceil(state.filtered.length / state.pageSize));
+    if (state.page < maxPage) {
+      state.page++;
+      renderTable();
+      updatePager();
+    }
   }
 
-  els.form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    calculate();
-  });
+  function init() {
+    cacheEls();
+    els.pageSize.value = '50';
 
-  els.resetBtn.addEventListener('click', reset);
-  els.prevPage.addEventListener('click', function () { goPage(-1); });
-  els.nextPage.addEventListener('click', function () { goPage(1); });
-  els.showMore.addEventListener('click', showMore);
+    var selects = filterSelects();
+    for (var i = 0; i < selects.length; i++) {
+      selects[i].addEventListener('change', onFilterChange);
+    }
+    els.clearFilters.addEventListener('click', clearFilters);
+    els.pageSize.addEventListener('change', onPageSizeChange);
+    els.prevPage.addEventListener('click', onPrev);
+    els.nextPage.addEventListener('click', onNext);
 
-  // Initial render with the default values
-  calculate();
+    loadData();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();

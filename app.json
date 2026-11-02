@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Loan / Mortgage Calculator"}]}
+{"v":2,"service":"server/app.mjs","bindings":[{"key":"sales","type":"data","id":16568}],"reportPages":[{"path":"/","title":"Sales Opportunities Dashboard"}]}
