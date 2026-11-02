@@ -68,6 +68,10 @@
               <option value="Done">Done</option>
             </select>
           </div>
+          <div class="field">
+            <label class="field-label" for="new-due">Due date</label>
+            <input class="input" id="new-due" name="due_date" type="date" autocomplete="off">
+          </div>
           <button class="btn btn-primary" type="submit" id="add-submit">Add task</button>
         </form>
       </section>
@@ -80,6 +84,7 @@
             <select class="input select select-sm" id="status-filter" aria-label="Filter tasks by status">
               <option value="All">All</option>
             </select>
+            <button class="btn btn-secondary filter-toggle" type="button" id="overdue-filter" aria-pressed="false">Overdue</button>
           </div>
         </div>
 
@@ -135,6 +140,10 @@
             <option value="In progress">In progress</option>
             <option value="Done">Done</option>
           </select>
+        </div>
+        <div class="field">
+          <label class="field-label" for="edit-due">Due date</label>
+          <input class="input" id="edit-due" name="due_date" type="date" autocomplete="off">
         </div>
         <div class="modal-actions">
           <button class="btn btn-danger" type="button" id="modal-delete">Delete</button>

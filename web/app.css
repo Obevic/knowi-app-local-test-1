@@ -24,7 +24,8 @@ body {
 /* Tabular figures for data */
 .task-date,
 .count-pill,
-.task-owner {
+.task-owner,
+.task-due {
   font-variant-numeric: tabular-nums;
 }
 
@@ -214,7 +215,7 @@ body {
 /* ===== Add form ===== */
 .add-form {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
   gap: 16px;
   align-items: end;
 }
@@ -393,6 +394,33 @@ body {
   color: #56666D;
 }
 
+.filter-toggle {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 14px;
+  border-radius: 999px;
+  background: #FFFFFF;
+  color: #56666D;
+  border: 1px solid #DCE3E4;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.filter-toggle:hover {
+  background: #F3F5F5;
+  color: #273D44;
+}
+
+.filter-toggle-active {
+  background: #F5E3E5;
+  color: #9C2F3C;
+  border-color: #9C2F3C;
+}
+
+.filter-toggle-active:hover {
+  background: #F5E3E5;
+  color: #9C2F3C;
+}
+
 /* ===== Task list (ledger) ===== */
 .task-list {
   border-top: 1px solid #E8EDEE;
@@ -442,6 +470,20 @@ body {
   font-size: 13px;
   color: #56666D;
   text-align: right;
+}
+
+.task-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #56666D;
+  white-space: nowrap;
+}
+
+.task-due-overdue {
+  color: #9C2F3C;
+  font-weight: 600;
 }
 
 .task-actions {

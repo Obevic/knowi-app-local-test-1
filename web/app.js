@@ -15,9 +15,11 @@ window.knowiReportReady = false;
   const newTitle = $('new-title');
   const newOwner = $('new-owner');
   const newStatus = $('new-status');
+  const newDue = $('new-due');
   const addSubmit = $('add-submit');
 
   const statusFilter = $('status-filter');
+  const overdueFilter = $('overdue-filter');
   const taskList = $('task-list');
   const loadingEl = $('loading');
   const errorState = $('error-state');
@@ -30,6 +32,7 @@ window.knowiReportReady = false;
   const editTitle = $('edit-title');
   const editOwner = $('edit-owner');
   const editStatus = $('edit-status');
+  const editDue = $('edit-due');
   const modalSave = $('modal-save');
   const modalCancel = $('modal-cancel');
   const modalDelete = $('modal-delete');
@@ -43,6 +46,7 @@ window.knowiReportReady = false;
   let editingId = null;
   let toastTimer = null;
   let lastFocused = null;
+  let overdueActive = false;
 
   const STATUSES = ['To do', 'In progress', 'Done'];
 
@@ -76,6 +80,14 @@ window.knowiReportReady = false;
     return 'pill-todo';
   }
 
+  function isOverdue(task) {
+    if (!task.due_date) return false;
+    if (task.status === 'Done') return false;
+    const due = new Date(task.due_date);
+    if (isNaN(due.getTime())) return false;
+    return due.getTime() < Date.now();
+  }
+
   function showToast(message, kind) {
     if (toastTimer) clearTimeout(toastTimer);
     toastEl.textContent = message;
@@ -99,7 +111,7 @@ window.knowiReportReady = false;
     loadingEl.hidden = true;
     emptyState.hidden = true;
     taskList.innerHTML = '';
-    errorMessage.textContent = message || 'We couldn\'t load your tasks. Please try again.';
+    errorMessage.textContent = message || "We couldn't load your tasks. Please try again.";
     errorState.hidden = false;
   }
 
@@ -152,6 +164,10 @@ window.knowiReportReady = false;
     const rows = visible
       .map((t) => {
         const created = formatDate(t.created_at);
+        const due = t.due_date ? formatDate(t.due_date) : '';
+        const overdue = isOverdue(t);
+        const dueClass = 'task-due' + (overdue ? ' task-due-overdue' : '');
+        const dueLabel = due ? (overdue ? 'Overdue: ' + due : 'Due: ' + due) : 'No due date';
         return (
           '<div class="task-row" role="listitem" data-id="' + t.id + '">' +
           '<div class="task-main">' +
@@ -163,6 +179,7 @@ window.knowiReportReady = false;
           '<span class="status-pill ' + statusClass(t.status) + '">' +
           escapeHtml(t.status) +
           '</span>' +
+          '<span class="' + dueClass + '" id="task-due-' + t.id + '">' + escapeHtml(dueLabel) + '</span>' +
           '<span class="task-date">' + (created ? escapeHtml(created) : '—') + '</span>' +
           '<div class="task-actions">' +
           '<button class="btn btn-ghost btn-sm" type="button" data-action="edit" data-id="' +
@@ -200,7 +217,8 @@ window.knowiReportReady = false;
   async function loadTasks() {
     setLoading(true);
     try {
-      const res = await fetch('api/tasks', {
+      const url = overdueActive ? 'api/tasks?filter=overdue' : 'api/tasks';
+      const res = await fetch(url, {
         headers: { Accept: 'application/json' },
       });
       if (res.status === 401) {
@@ -208,7 +226,7 @@ window.knowiReportReady = false;
         return;
       }
       if (!res.ok) {
-        let msg = 'We couldn\'t load your tasks. Please try again.';
+        let msg = "We couldn't load your tasks. Please try again.";
         try {
           const j = await res.json();
           if (j && j.error) msg = j.error;
@@ -232,6 +250,7 @@ window.knowiReportReady = false;
     editTitle.value = task.title || '';
     editOwner.value = task.owner || '';
     editStatus.value = STATUSES.includes(task.status) ? task.status : 'To do';
+    editDue.value = task.due_date ? task.due_date.slice(0, 10) : '';
     lastFocused = document.activeElement;
     modalBackdrop.hidden = false;
     document.body.classList.add('modal-open');
@@ -285,6 +304,7 @@ window.knowiReportReady = false;
           title: title,
           owner: newOwner.value.trim(),
           status: newStatus.value,
+          due_date: newDue.value || '',
         }),
       });
       if (res.status === 401) {
@@ -307,6 +327,7 @@ window.knowiReportReady = false;
       newTitle.value = '';
       newOwner.value = '';
       newStatus.value = 'To do';
+      newDue.value = '';
       showToast('Task added');
       render();
     } catch (err) {
@@ -334,6 +355,7 @@ window.knowiReportReady = false;
           title: title,
           owner: editOwner.value.trim(),
           status: editStatus.value,
+          due_date: editDue.value || '',
         }),
       });
       if (res.status === 401) {
@@ -415,6 +437,13 @@ window.knowiReportReady = false;
   });
 
   statusFilter.addEventListener('change', renderList);
+
+  overdueFilter.addEventListener('click', () => {
+    overdueActive = !overdueActive;
+    overdueFilter.classList.toggle('filter-toggle-active', overdueActive);
+    overdueFilter.setAttribute('aria-pressed', String(overdueActive));
+    loadTasks();
+  });
 
   retryBtn.addEventListener('click', loadTasks);
 

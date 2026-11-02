@@ -27,7 +27,7 @@ function isValidDnsName(name) {
   if (typeof name !== 'string') return false;
   if (name.length < 1 || name.length > 253) return false;
   if (name.endsWith('.')) return false;
-  if (name.includes('@')) return false;
+  if (name.includes('＠')) return false;
   if (name.includes(':')) return false;
   if (name.includes('_')) return false;
   if (name.includes('\n') || name.includes('\r') || name.includes('\t')) return false;
@@ -161,18 +161,37 @@ function sanitizeTask(row) {
     title: row.title,
     owner: row.owner,
     status: row.status,
+    due_date: row.due_date,
     created_at: row.created_at,
   };
 }
 
+function parseDueDate(value) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (trimmed === '') return null;
+  const d = new Date(trimmed);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 app.get('/api/tasks', async (req, res) => {
   if (!pool || !dbReady) return dbUnavailable(res);
+  const filter = req.query.filter;
   try {
     const client = await pool.connect();
     try {
-      const result = await client.query(
-        'SELECT id, title, owner, status, created_at FROM tasks ORDER BY created_at DESC, id DESC LIMIT 500'
-      );
+      let result;
+      if (filter === 'overdue') {
+        result = await client.query(
+          "SELECT id, title, owner, status, due_date, created_at FROM tasks WHERE due_date IS NOT NULL AND due_date < now() AND status != 'Done' ORDER BY created_at DESC, id DESC LIMIT 500"
+        );
+      } else {
+        result = await client.query(
+          'SELECT id, title, owner, status, due_date, created_at FROM tasks ORDER BY created_at DESC, id DESC LIMIT 500'
+        );
+      }
       const tasks = result.rows.map(sanitizeTask);
       res.json({ tasks });
     } finally {
@@ -185,18 +204,19 @@ app.get('/api/tasks', async (req, res) => {
 
 app.post('/api/tasks', async (req, res) => {
   if (!pool || !dbReady) return dbUnavailable(res);
-  const { title, owner, status } = req.body || {};
+  const { title, owner, status, due_date } = req.body || {};
   if (typeof title !== 'string' || title.trim().length === 0) {
     return res.status(400).json({ error: 'Title is required' });
   }
   const ownerVal = typeof owner === 'string' ? owner.trim() : '';
   const statusVal = STATUSES.includes(status) ? status : 'To do';
+  const dueVal = parseDueDate(due_date);
   try {
     const client = await pool.connect();
     try {
       const result = await client.query(
-        'INSERT INTO tasks (title, owner, status) VALUES ($1, $2, $3) RETURNING id, title, owner, status, created_at',
-        [title.trim().slice(0, 200), ownerVal.slice(0, 120), statusVal]
+        'INSERT INTO tasks (title, owner, status, due_date) VALUES ($1, $2, $3, $4) RETURNING id, title, owner, status, due_date, created_at',
+        [title.trim().slice(0, 200), ownerVal.slice(0, 120), statusVal, dueVal]
       );
       res.status(201).json({ task: sanitizeTask(result.rows[0]) });
     } finally {
@@ -213,18 +233,19 @@ app.put('/api/tasks/:id', async (req, res) => {
   if (!Number.isInteger(id) || id <= 0) {
     return res.status(400).json({ error: 'Invalid task id' });
   }
-  const { title, owner, status } = req.body || {};
+  const { title, owner, status, due_date } = req.body || {};
   if (typeof title !== 'string' || title.trim().length === 0) {
     return res.status(400).json({ error: 'Title is required' });
   }
   const ownerVal = typeof owner === 'string' ? owner.trim() : '';
   const statusVal = STATUSES.includes(status) ? status : 'To do';
+  const dueVal = parseDueDate(due_date);
   try {
     const client = await pool.connect();
     try {
       const result = await client.query(
-        'UPDATE tasks SET title = $1, owner = $2, status = $3 WHERE id = $4 RETURNING id, title, owner, status, created_at',
-        [title.trim().slice(0, 200), ownerVal.slice(0, 120), statusVal, id]
+        'UPDATE tasks SET title = $1, owner = $2, status = $3, due_date = $4 WHERE id = $5 RETURNING id, title, owner, status, due_date, created_at',
+        [title.trim().slice(0, 200), ownerVal.slice(0, 120), statusVal, dueVal, id]
       );
       if (result.rowCount === 0) {
         return res.status(404).json({ error: 'Task not found' });
