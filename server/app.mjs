@@ -1,13 +1,17 @@
 import express from 'express';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const webRoot = path.join(__dirname, '..', 'web');
-const indexHtmlPath = path.join(webRoot, 'index.html');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
+const PORT = Number(process.env.PORT) || 8080;
+
 app.use(express.json({ limit: '256kb' }));
+
+const webRoot = path.resolve(__dirname, '../web');
+const indexHtmlPath = path.join(webRoot, 'index.html');
 
 app.use(express.static(webRoot));
 
@@ -17,5 +21,4 @@ app.use((req, res, next) => {
   res.sendFile(indexHtmlPath);
 });
 
-const port = Number(process.env.PORT);
-app.listen(port, '0.0.0.0');
+app.listen(PORT, '0.0.0.0');

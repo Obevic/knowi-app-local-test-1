@@ -1,17 +1,45 @@
+/* ============================================================
+   Inventory Desk — app.css
+   Palette:
+     text        #1E2F35
+     titles      #273D44
+     primary     #375357  (hover #273D44)
+     links/lines #4E6E78
+     muted       #56666D
+     canvas      #F3F5F5
+     cards       #FFFFFF
+     sunken      #EAEFEF
+     borders     #DCE3E4
+   ============================================================ */
+
 :root {
-  --text: #1e2f35;
-  --title: #273d44;
-  --button: #375357;
-  --button-hover: #273d44;
-  --button-text: #ffffff;
-  --link: #4e6e78;
-  --muted: #56666d;
-  --canvas: #f3f5f5;
-  --card: #ffffff;
-  --sunken: #eaeff0;
-  --border: #dce3e4;
-  --risk-text: #9c2f3c;
-  --risk-bg: #f5e3e5;
+  --text: #1E2F35;
+  --title: #273D44;
+  --primary: #375357;
+  --primary-hover: #273D44;
+  --link: #4E6E78;
+  --muted: #56666D;
+  --canvas: #F3F5F5;
+  --card: #FFFFFF;
+  --sunken: #EAEFEF;
+  --border: #DCE3E4;
+
+  --ok-bg: #E4F0EC;
+  --ok-fg: #276B5D;
+  --soon-bg: #F6ECD9;
+  --soon-fg: #7F5410;
+  --risk-bg: #F5E3E5;
+  --risk-fg: #9C2F3C;
+  --wait-bg: #F1ECE6;
+  --wait-fg: #5F4C38;
+
+  --serif: Charter, "Iowan Old Style", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius: 12px;
+  --radius-sm: 9px;
+  --control-h: 38px;
+  --shadow: 0 1px 2px rgba(30, 47, 53, 0.04), 0 4px 14px rgba(30, 47, 53, 0.05);
 }
 
 * {
@@ -25,281 +53,750 @@ body {
 }
 
 body {
-  background: var(--canvas);
-  color: var(--text);
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--sans);
   font-size: 15px;
-  font-variant-numeric: tabular-nums;
   line-height: 1.5;
+  color: var(--text);
+  background: var(--canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-.serif {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-weight: 400;
+/* Tabular figures for numeric-heavy UI */
+.summary-value,
+.cell-qty,
+.cell-reorder,
+.cell-cost,
+.qty-input,
+.nav-pill {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
-.app-header {
+/* ---------- Focus visibility ---------- */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ============================================================
+   Shell
+   ============================================================ */
+.app-shell {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 32px;
+  min-height: 100vh;
+  width: 100%;
+}
+
+/* ============================================================
+   Sidebar
+   ============================================================ */
+.sidebar {
+  flex: 0 0 236px;
+  width: 236px;
   background: var(--card);
-  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 22px 16px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.sidebar-top {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 4px 6px;
 }
 
 .brand-mark {
-  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--sunken);
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.brand-mark svg {
+  display: block;
 }
 
 .brand-name {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
+  font-family: var(--serif);
+  font-size: 19px;
   font-weight: 400;
-  font-size: 20px;
   color: var(--title);
   letter-spacing: 0.01em;
-}
-
-.data-badge {
-  font-size: 13px;
-  color: var(--muted);
-  background: var(--sunken);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 7px 14px;
-}
-
-.app-main {
-  max-width: 1360px;
-  margin: 0 auto;
-  padding: 36px 32px 64px;
-}
-
-.page-title {
-  font-size: 28px;
-  color: var(--title);
-  margin: 0 0 28px;
-}
-
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin-bottom: 28px;
-}
-
-.control-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 220px;
-}
-
-.control-field label {
-  font-size: 13px;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.control-field input,
-.control-field select {
-  height: 38px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
-  padding: 0 12px;
-  font-size: 15px;
-  font-family: inherit;
-}
-
-.control-field input:focus-visible,
-.control-field select:focus-visible,
-.quantity-input:focus-visible,
-.btn-restock:focus-visible {
-  outline: 2px solid var(--link);
-  outline-offset: 2px;
-}
-
-.summary-card {
-  background: var(--card);
-  border: 1px solid #e8edee;
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(30, 47, 53, 0.06), 0 4px 10px rgba(30, 47, 53, 0.04);
-  padding: 22px 28px;
-  margin-bottom: 28px;
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-}
-
-.summary-label {
-  font-size: 14px;
-  color: var(--muted);
-}
-
-.summary-value {
-  font-size: 30px;
-  color: var(--title);
-}
-
-.table-card {
-  background: var(--card);
-  border: 1px solid #e8edee;
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(30, 47, 53, 0.06), 0 4px 10px rgba(30, 47, 53, 0.04);
-  overflow-x: auto;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 680px;
-}
-
-thead th {
-  text-align: left;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: var(--sunken);
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 600;
-}
-
-tbody td {
-  padding: 14px 20px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
-}
-
-tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.cell-name {
-  min-width: 180px;
-}
-
-.item-name-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.item-name {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-weight: 400;
-  font-size: 16px;
-  color: var(--title);
-}
-
-.cell-numeric {
-  font-variant-numeric: tabular-nums;
-}
-
-.badge {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 999px;
   white-space: nowrap;
 }
 
-.badge-risk {
-  color: var(--risk-text);
-  background: var(--risk-bg);
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.row-at-risk {
-  background: #fbf5f6;
-}
-
-.quantity-input {
-  width: 84px;
-  height: 36px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--card);
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
   color: var(--text);
-  padding: 0 10px;
+  text-decoration: none;
   font-size: 15px;
-  font-variant-numeric: tabular-nums;
-  font-family: inherit;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 
-.btn-restock {
-  height: 38px;
-  padding: 0 18px;
-  border-radius: 9px;
-  border: none;
-  background: var(--button);
-  color: var(--button-text);
+.nav-link:hover {
+  background: var(--sunken);
+}
+
+.nav-link[aria-current="page"] {
+  background: var(--sunken);
+  color: var(--title);
+  font-weight: 600;
+}
+
+.nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--link);
+  flex: 0 0 auto;
+}
+
+.nav-link[aria-current="page"] .nav-icon {
+  color: var(--primary);
+}
+
+.nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.nav-pill {
+  flex: 0 0 auto;
+  min-width: 24px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--sunken);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.nav-link[aria-current="page"] .nav-pill {
+  background: var(--card);
+  color: var(--primary);
+}
+
+.sidebar-bottom {
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.viewer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+}
+
+.viewer-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--sunken);
+  color: var(--primary);
+  flex: 0 0 auto;
+}
+
+.viewer-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.viewer-name {
   font-size: 14px;
   font-weight: 600;
-  cursor: pointer;
-  font-family: inherit;
+  color: var(--title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.btn-restock:hover {
-  background: var(--button-hover);
+.viewer-email {
+  font-size: 12.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.empty-state {
-  padding: 48px 20px;
-  text-align: center;
+/* ============================================================
+   Canvas / content
+   ============================================================ */
+.canvas {
+  flex: 1 1 auto;
+  min-width: 0;
+  background: var(--canvas);
+}
+
+.content {
+  max-width: 1360px;
+  margin: 0;
+  padding: 32px 32px 56px;
+}
+
+.page-head {
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1.15;
+  color: var(--title);
+  margin: 0 0 6px;
+  letter-spacing: 0.005em;
+}
+
+.page-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 60ch;
+}
+
+/* ============================================================
+   Controls
+   ============================================================ */
+.controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.field-input {
+  height: var(--control-h);
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  width: 100%;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.field-input::placeholder {
   color: var(--muted);
 }
 
-.toast {
-  position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--title);
-  color: #ffffff;
-  padding: 12px 20px;
-  border-radius: 9px;
+.field-input:hover {
+  border-color: var(--link);
+}
+
+.field-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(55, 83, 87, 0.14);
+}
+
+select.field-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: none;
+  padding-right: 34px;
+  background-color: var(--card);
+  cursor: pointer;
+}
+
+/* Custom chevron for the select (no external assets) */
+.field:has(select.field-input) {
+  position: relative;
+}
+
+select.field-input {
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, transparent 50%, var(--muted) 50%);
+  background-position: calc(100% - 18px) 17px, calc(100% - 13px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* ============================================================
+   Summary card
+   ============================================================ */
+.summary-card {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px 22px;
+  margin-bottom: 20px;
+}
+
+.summary-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.summary-value {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 38px;
+  line-height: 1;
+  color: var(--title);
+}
+
+/* ============================================================
+   Table card
+   ============================================================ */
+.table-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.inv-table {
+  width: 100%;
+  min-width: 720px;
+  border-collapse: collapse;
+  font-size: 15px;
+}
+
+.inv-table thead th {
+  background: var(--sunken);
+  color: var(--muted);
+  text-align: left;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.inv-table tbody td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+  color: var(--text);
+}
+
+.inv-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Alternating row tint */
+.inv-row:nth-child(even) {
+  background: #F8FAFA;
+}
+
+.inv-row:nth-child(odd) {
+  background: var(--card);
+}
+
+/* Item cell */
+.cell-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.item-name {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 16px;
+  color: var(--title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cell-supplier {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Quantity input */
+.cell-qty {
+  width: 96px;
+}
+
+.qty-input {
+  width: 100%;
+  height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  text-align: right;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.qty-input:hover {
+  border-color: var(--link);
+}
+
+.qty-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(55, 83, 87, 0.14);
+}
+
+/* Hide number spinners for a cleaner ledger look */
+.qty-input::-webkit-outer-spin-button,
+.qty-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.qty-input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.cell-reorder,
+.cell-cost {
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.cell-cost {
+  text-align: right;
+}
+
+.cell-reorder {
+  color: var(--muted);
+}
+
+.cell-restock {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn {
+  font-family: var(--sans);
   font-size: 14px;
-  box-shadow: 0 4px 14px rgba(30, 47, 53, 0.25);
-  max-width: 90vw;
+  font-weight: 600;
+  height: var(--control-h);
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
+.btn-restock {
+  background: var(--card);
+  color: var(--primary);
+  border-color: var(--primary);
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.btn-restock:hover {
+  background: var(--primary);
+  color: #FFFFFF;
+}
+
+.btn-restock:active {
+  background: var(--primary-hover);
+  color: #FFFFFF;
+}
+
+/* Restocked success flash */
+.btn-restock.is-restocked {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+  border-color: var(--ok-fg);
+  pointer-events: none;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--link);
+  border-color: var(--border);
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+.btn-ghost:hover {
+  background: var(--sunken);
+  color: var(--primary);
+  border-color: var(--link);
+}
+
+.btn-ghost[hidden] {
+  display: none;
+}
+
+/* ============================================================
+   Status badges
+   ============================================================ */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.status-on-track {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+}
+
+.status-due-soon {
+  background: var(--soon-bg);
+  color: var(--soon-fg);
+}
+
+.status-at-risk {
+  background: var(--risk-bg);
+  color: var(--risk-fg);
+}
+
+.status-waiting {
+  background: var(--wait-bg);
+  color: var(--wait-fg);
+}
+
+/* ============================================================
+   Table footer
+   ============================================================ */
+.table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--card);
+}
+
+.foot-count {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ============================================================
+   State box (empty / error / loading)
+   ============================================================ */
+.state {
+  margin-top: 20px;
+  padding: 24px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.state[hidden] {
+  display: none;
+}
+
+.state-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* Quiet shimmer skeleton */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--sunken) 25%, #F4F7F7 50%, var(--sunken) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ============================================================
+   Responsive
+   ============================================================ */
 @media (max-width: 860px) {
-  .app-header {
-    padding: 16px 20px;
+  .app-shell {
+    flex-direction: column;
   }
 
-  .app-main {
-    padding: 24px 16px 48px;
+  .sidebar {
+    flex: 0 0 auto;
+    width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+
+  .sidebar-top {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .brand {
+    padding: 0;
+  }
+
+  .nav {
+    flex-direction: row;
+    gap: 6px;
+  }
+
+  .nav-link {
+    padding: 7px 10px;
+  }
+
+  .nav-label {
+    display: none;
+  }
+
+  .sidebar-bottom {
+    display: none;
+  }
+
+  .content {
+    padding: 20px 16px 40px;
+  }
+
+  .page-title {
+    font-size: 28px;
   }
 
   .controls {
-    flex-direction: column;
-    gap: 14px;
+    grid-template-columns: 1fr;
   }
 
-  .control-field {
-    min-width: 0;
-  }
-
-  .summary-card {
-    padding: 18px 20px;
+  .summary-value {
+    font-size: 30px;
   }
 }
 
+@media (max-width: 480px) {
+  .summary-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* ============================================================
+   Print
+   ============================================================ */
 @media print {
-  .app-header,
-  .controls {
-    display: none;
+  .sidebar,
+  .controls,
+  .table-foot,
+  .btn {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block;
+  }
+
+  .canvas {
+    background: #FFFFFF;
+  }
+
+  .content {
+    max-width: none;
+    padding: 0;
+  }
+
+  .table-card,
+  .summary-card {
+    box-shadow: none;
+  }
+
+  .table-scroll {
+    overflow: visible;
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
   }
 }
 

@@ -1,193 +1,359 @@
 window.knowiReportReady = false;
 
-const ITEMS = [
-  { id: 'cable-kit', name: 'Cable Kit', supplier: 'North Supply', quantity: 11, reorderPoint: 10, unitCost: 40 },
-  { id: 'usb-c-cable', name: 'USB-C Cable', supplier: 'North Supply', quantity: 10, reorderPoint: 10, unitCost: 12 },
-  { id: 'adapter-hub', name: 'Adapter Hub', supplier: 'West Supply', quantity: 22, reorderPoint: 8, unitCost: 55 },
-  { id: 'sensor-pack', name: 'Sensor Pack', supplier: 'East Supply', quantity: 3, reorderPoint: 6, unitCost: 95 },
-  { id: 'docking-station', name: 'Docking Station', supplier: 'West Supply', quantity: 14, reorderPoint: 4, unitCost: 170 },
-  { id: 'power-cable', name: 'Power Cable', supplier: 'East Supply', quantity: 2, reorderPoint: 5, unitCost: 18 },
-  { id: 'display-arm', name: 'Display Arm', supplier: 'North Supply', quantity: 8, reorderPoint: 8, unitCost: 110 },
-  { id: 'router-unit', name: 'Router Unit', supplier: 'West Supply', quantity: 11, reorderPoint: 3, unitCost: 220 },
-];
+(function () {
+  'use strict';
 
-const state = {
-  items: ITEMS.map((item) => ({ ...item })),
-  search: '',
-  supplier: 'All',
-  toast: null,
-};
+  var PAGE_SIZE = 50;
+  var REORDER_BUFFER = 10;
 
-const money = (value) =>
-  '$' + Math.round(value).toLocaleString('en-US');
+  var items = [];
+  var visibleCount = PAGE_SIZE;
+  var searchQuery = '';
+  var supplierFilter = 'All';
+  var restockTimers = {};
 
-function getSupplierOptions() {
-  const suppliers = Array.from(new Set(state.items.map((item) => item.supplier))).sort();
-  return ['All', ...suppliers];
-}
+  var searchInput = document.getElementById('searchInput');
+  var filterSelect = document.getElementById('filterSelect');
+  var totalValueEl = document.getElementById('totalValue');
+  var tableBody = document.getElementById('tableBody');
+  var rowCountEl = document.getElementById('rowCount');
+  var showMoreBtn = document.getElementById('showMore');
+  var navCountEl = document.getElementById('navCount');
+  var reorderCountEl = document.getElementById('reorderCount');
+  var stateBox = document.getElementById('stateBox');
+  var stateText = document.getElementById('stateText');
+  var viewerNameEl = document.getElementById('viewerName');
+  var viewerEmailEl = document.getElementById('viewerEmail');
 
-function getFilteredItems() {
-  const query = state.search.trim().toLowerCase();
-  return state.items.filter((item) => {
-    const matchesSearch = query === '' || item.name.toLowerCase().includes(query);
-    const matchesSupplier = state.supplier === 'All' || item.supplier === state.supplier;
-    return matchesSearch && matchesSupplier;
-  });
-}
-
-function getTotalStockValue() {
-  return state.items.reduce((sum, item) => sum + item.quantity * item.unitCost, 0);
-}
-
-function renderFilterOptions() {
-  const select = document.getElementById('supplier-filter');
-  const options = getSupplierOptions();
-  const current = state.supplier;
-  select.innerHTML = '';
-  for (const option of options) {
-    const el = document.createElement('option');
-    el.value = option;
-    el.textContent = option;
-    if (option === current) el.selected = true;
-    select.appendChild(el);
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
-}
 
-function renderTotal() {
-  document.getElementById('total-stock-value').textContent = money(getTotalStockValue());
-}
+  function generateItems() {
+    var rng = mulberry32(20261103);
+    var suppliers = [
+      'Northwind Traders',
+      'Apex Components',
+      'Blue Harbor Supply',
+      'Cedar & Pine Co.',
+      'Delta Logistics',
+      'Evergreen Goods',
+      'Falcon Industrial',
+      'Granite Ridge',
+      'Harbor Lane',
+      'Ironwood Mfg.'
+    ];
+    var categories = [
+      'Fasteners', 'Electrical', 'Packaging', 'Office', 'Safety',
+      'Hardware', 'Adhesives', 'Tools', 'Cleaning', 'Labels'
+    ];
+    var adjectives = [
+      'Standard', 'Heavy-Duty', 'Compact', 'Premium', 'Industrial',
+      'Eco', 'Pro', 'Ultra', 'Basic', 'Reinforced'
+    ];
+    var nouns = [
+      'Bolt', 'Screw', 'Bracket', 'Cable', 'Gasket', 'Washer',
+      'Hinge', 'Strap', 'Seal', 'Clip', 'Bearing', 'Valve',
+      'Gasket', 'Rivet', 'Pin', 'Sleeve', 'Grommet', 'Bushing',
+      'Spacer', 'Anchor'
+    ];
+    var units = ['pcs', 'box', 'roll', 'set', 'pack', 'unit', 'meter', 'sheet'];
 
-function renderTable() {
-  const tbody = document.getElementById('items-tbody');
-  const emptyState = document.getElementById('empty-state');
-  const filtered = getFilteredItems();
+    var used = {};
+    var list = [];
+    var guard = 0;
+    while (list.length < 120 && guard < 5000) {
+      guard++;
+      var cat = categories[Math.floor(rng() * categories.length)];
+      var adj = adjectives[Math.floor(rng() * adjectives.length)];
+      var noun = nouns[Math.floor(rng() * nouns.length)];
+      var name = adj + ' ' + noun;
+      if (used[name]) continue;
+      used[name] = true;
 
-  tbody.innerHTML = '';
+      var reorderPoint = 10 + Math.floor(rng() * 90);
+      var quantity = Math.floor(rng() * (reorderPoint * 3 + 40));
+      var unitCost = Math.round((0.4 + rng() * 48) * 100) / 100;
 
-  if (filtered.length === 0) {
-    emptyState.hidden = false;
-    return;
+      list.push({
+        id: 'itm-' + (list.length + 1),
+        name: name,
+        category: cat,
+        supplier: suppliers[Math.floor(rng() * suppliers.length)],
+        quantity: quantity,
+        reorderPoint: reorderPoint,
+        unitCost: unitCost,
+        unit: units[Math.floor(rng() * units.length)]
+      });
+    }
+    return list;
   }
-  emptyState.hidden = true;
 
-  for (const item of filtered) {
-    const row = document.createElement('tr');
-    const lowStock = item.quantity <= item.reorderPoint;
-    if (lowStock) row.classList.add('row-at-risk');
+  function fmtMoney(n) {
+    return '$' + Number(n).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  }
 
-    const nameCell = document.createElement('td');
-    nameCell.className = 'cell-name';
-    const nameWrap = document.createElement('div');
-    nameWrap.className = 'item-name-wrap';
-    const nameEl = document.createElement('span');
+  function fmtInt(n) {
+    return Number(n).toLocaleString('en-US');
+  }
+
+  function statusOf(item) {
+    if (item.quantity <= item.reorderPoint) return 'at-risk';
+    if (item.quantity <= item.reorderPoint * 1.5) return 'due-soon';
+    return 'on-track';
+  }
+
+  function statusLabel(key) {
+    if (key === 'at-risk') return 'At risk';
+    if (key === 'due-soon') return 'Due soon';
+    return 'On track';
+  }
+
+  function buildFilterOptions() {
+    var seen = {};
+    var opts = ['All'];
+    for (var i = 0; i < items.length; i++) {
+      var s = items[i].supplier;
+      if (!seen[s]) {
+        seen[s] = true;
+        opts.push(s);
+      }
+    }
+    opts.sort(function (a, b) {
+      if (a === 'All') return -1;
+      if (b === 'All') return 1;
+      return a.localeCompare(b);
+    });
+    filterSelect.innerHTML = '';
+    for (var j = 0; j < opts.length; j++) {
+      var opt = document.createElement('option');
+      opt.value = opts[j];
+      opt.textContent = opts[j];
+      filterSelect.appendChild(opt);
+    }
+    filterSelect.value = supplierFilter;
+  }
+
+  function getFiltered() {
+    var q = searchQuery.trim().toLowerCase();
+    return items.filter(function (it) {
+      if (supplierFilter !== 'All' && it.supplier !== supplierFilter) return false;
+      if (q && it.name.toLowerCase().indexOf(q) === -1) return false;
+      return true;
+    });
+  }
+
+  function updateTotal() {
+    var total = 0;
+    for (var i = 0; i < items.length; i++) {
+      total += items[i].quantity * items[i].unitCost;
+    }
+    totalValueEl.textContent = fmtMoney(total);
+  }
+
+  function updateCounts() {
+    var reorder = 0;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].quantity <= items[i].reorderPoint) reorder++;
+    }
+    navCountEl.textContent = fmtInt(items.length);
+    reorderCountEl.textContent = fmtInt(reorder);
+  }
+
+  function makeRow(item, index) {
+    var tr = document.createElement('tr');
+    tr.className = 'inv-row';
+    tr.dataset.id = item.id;
+
+    var tdItem = document.createElement('td');
+    tdItem.className = 'cell-item';
+    var nameEl = document.createElement('span');
     nameEl.className = 'item-name';
     nameEl.textContent = item.name;
-    nameWrap.appendChild(nameEl);
-    if (lowStock) {
-      const badge = document.createElement('span');
-      badge.className = 'badge badge-risk';
-      badge.textContent = 'Needs restock';
-      nameWrap.appendChild(badge);
+    tdItem.appendChild(nameEl);
+    var statusKey = statusOf(item);
+    var badge = document.createElement('span');
+    badge.className = 'status-badge status-' + statusKey;
+    badge.textContent = statusLabel(statusKey);
+    tdItem.appendChild(badge);
+
+    var tdSup = document.createElement('td');
+    tdSup.className = 'cell-supplier';
+    tdSup.textContent = item.supplier;
+
+    var tdQty = document.createElement('td');
+    tdQty.className = 'cell-qty';
+    var qtyInput = document.createElement('input');
+    qtyInput.type = 'number';
+    qtyInput.min = '0';
+    qtyInput.step = '1';
+    qtyInput.className = 'qty-input';
+    qtyInput.value = String(item.quantity);
+    qtyInput.setAttribute('aria-label', 'Quantity for ' + item.name);
+    qtyInput.addEventListener('input', function () {
+      var v = parseInt(qtyInput.value, 10);
+      if (isNaN(v) || v < 0) v = 0;
+      item.quantity = v;
+      updateTotal();
+      updateRowStatus(tr, item);
+      updateCounts();
+    });
+    tdQty.appendChild(qtyInput);
+
+    var tdReorder = document.createElement('td');
+    tdReorder.className = 'cell-reorder';
+    tdReorder.textContent = fmtInt(item.reorderPoint);
+
+    var tdCost = document.createElement('td');
+    tdCost.className = 'cell-cost';
+    tdCost.textContent = fmtMoney(item.unitCost);
+
+    var tdRestock = document.createElement('td');
+    tdRestock.className = 'cell-restock';
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-restock';
+    btn.textContent = 'Restock';
+    btn.setAttribute('aria-label', 'Restock ' + item.name);
+    btn.addEventListener('click', function () {
+      doRestock(item, qtyInput, btn);
+    });
+    tdRestock.appendChild(btn);
+
+    tr.appendChild(tdItem);
+    tr.appendChild(tdSup);
+    tr.appendChild(tdQty);
+    tr.appendChild(tdReorder);
+    tr.appendChild(tdCost);
+    tr.appendChild(tdRestock);
+    return tr;
+  }
+
+  function updateRowStatus(tr, item) {
+    var badge = tr.querySelector('.status-badge');
+    if (!badge) return;
+    var key = statusOf(item);
+    badge.className = 'status-badge status-' + key;
+    badge.textContent = statusLabel(key);
+  }
+
+  function doRestock(item, qtyInput, btn) {
+    item.quantity = item.reorderPoint + REORDER_BUFFER;
+    qtyInput.value = String(item.quantity);
+    updateTotal();
+    updateRowStatus(btn.closest('tr'), item);
+    updateCounts();
+
+    btn.classList.add('is-restocked');
+    btn.textContent = 'Restocked';
+    btn.disabled = true;
+    if (restockTimers[item.id]) clearTimeout(restockTimers[item.id]);
+    restockTimers[item.id] = setTimeout(function () {
+      btn.classList.remove('is-restocked');
+      btn.textContent = 'Restock';
+      btn.disabled = false;
+      delete restockTimers[item.id];
+    }, 1400);
+  }
+
+  function renderTable() {
+    var filtered = getFiltered();
+    var visible = filtered.slice(0, visibleCount);
+
+    tableBody.innerHTML = '';
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < visible.length; i++) {
+      frag.appendChild(makeRow(filtered[i], i));
     }
-    nameCell.appendChild(nameWrap);
+    tableBody.appendChild(frag);
 
-    const supplierCell = document.createElement('td');
-    supplierCell.textContent = item.supplier;
+    rowCountEl.textContent = fmtInt(filtered.length) + (filtered.length === 1 ? ' item' : ' items');
 
-    const quantityCell = document.createElement('td');
-    const quantityInput = document.createElement('input');
-    quantityInput.type = 'number';
-    quantityInput.min = '0';
-    quantityInput.className = 'quantity-input';
-    quantityInput.value = String(item.quantity);
-    quantityInput.setAttribute('aria-label', `Quantity for ${item.name}`);
-    quantityInput.addEventListener('input', (event) => {
-      const value = Number(event.target.value);
-      item.quantity = Number.isFinite(value) && value >= 0 ? value : 0;
-      renderTotal();
-      renderRowState(row, item);
-    });
-    quantityCell.appendChild(quantityInput);
+    if (filtered.length > visibleCount) {
+      showMoreBtn.hidden = false;
+      showMoreBtn.textContent = 'Show more (' + fmtInt(filtered.length - visibleCount) + ' remaining)';
+    } else {
+      showMoreBtn.hidden = true;
+    }
 
-    const reorderCell = document.createElement('td');
-    reorderCell.className = 'cell-numeric';
-    reorderCell.textContent = String(item.reorderPoint);
-
-    const costCell = document.createElement('td');
-    costCell.className = 'cell-numeric';
-    costCell.textContent = money(item.unitCost);
-
-    const restockCell = document.createElement('td');
-    const restockBtn = document.createElement('button');
-    restockBtn.type = 'button';
-    restockBtn.className = 'btn-restock';
-    restockBtn.textContent = 'Restock';
-    restockBtn.addEventListener('click', () => {
-      const target = item.reorderPoint * 2 + 10;
-      item.quantity = target;
-      quantityInput.value = String(target);
-      renderTotal();
-      renderRowState(row, item);
-      showToast(`Restocked ${item.name} to ${target} units.`);
-    });
-    restockCell.appendChild(restockBtn);
-
-    row.appendChild(nameCell);
-    row.appendChild(supplierCell);
-    row.appendChild(quantityCell);
-    row.appendChild(reorderCell);
-    row.appendChild(costCell);
-    row.appendChild(restockCell);
-    tbody.appendChild(row);
+    if (filtered.length === 0) {
+      stateBox.hidden = false;
+      stateText.textContent = 'No items match your search or filter. Try clearing the search or choosing a different supplier.';
+    } else {
+      stateBox.hidden = true;
+    }
   }
-}
 
-function renderRowState(row, item) {
-  const lowStock = item.quantity <= item.reorderPoint;
-  row.classList.toggle('row-at-risk', lowStock);
-  const nameWrap = row.querySelector('.item-name-wrap');
-  let badge = nameWrap.querySelector('.badge-risk');
-  if (lowStock && !badge) {
-    badge = document.createElement('span');
-    badge.className = 'badge badge-risk';
-    badge.textContent = 'Needs restock';
-    nameWrap.appendChild(badge);
-  } else if (!lowStock && badge) {
-    badge.remove();
+  function render() {
+    buildFilterOptions();
+    updateTotal();
+    updateCounts();
+    renderTable();
   }
-}
 
-let toastTimer = null;
-function showToast(message) {
-  const toastEl = document.getElementById('toast');
-  toastEl.textContent = message;
-  toastEl.hidden = false;
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toastEl.hidden = true;
-  }, 3200);
-}
+  function initViewer() {
+    var name = 'Signed in';
+    var email = '—';
+    try {
+      var res = fetch('api/viewer', { method: 'GET', headers: { 'Accept': 'application/json' } });
+      res.then(function (r) {
+        if (!r.ok) return null;
+        return r.json();
+      }).then(function (data) {
+        if (data && data.name) {
+          name = data.name;
+          email = data.email || '—';
+        }
+        viewerNameEl.textContent = name;
+        viewerEmailEl.textContent = email;
+      }).catch(function () {
+        viewerNameEl.textContent = name;
+        viewerEmailEl.textContent = email;
+      });
+    } catch (e) {
+      viewerNameEl.textContent = name;
+      viewerEmailEl.textContent = email;
+    }
+  }
 
-function attachControls() {
-  const searchInput = document.getElementById('search-input');
-  searchInput.addEventListener('input', (event) => {
-    state.search = event.target.value;
-    renderTable();
-  });
+  function init() {
+    items = generateItems();
+    render();
+    initViewer();
 
-  const supplierSelect = document.getElementById('supplier-filter');
-  supplierSelect.addEventListener('change', (event) => {
-    state.supplier = event.target.value;
-    renderTable();
-  });
-}
+    searchInput.addEventListener('input', function () {
+      searchQuery = searchInput.value;
+      visibleCount = PAGE_SIZE;
+      renderTable();
+    });
 
-function init() {
-  renderFilterOptions();
-  renderTotal();
-  renderTable();
-  attachControls();
-  window.knowiReportReady = true;
-}
+    filterSelect.addEventListener('change', function () {
+      supplierFilter = filterSelect.value;
+      visibleCount = PAGE_SIZE;
+      renderTable();
+    });
 
-init();
+    showMoreBtn.addEventListener('click', function () {
+      visibleCount += PAGE_SIZE;
+      renderTable();
+    });
+
+    window.knowiReportReady = true;
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
