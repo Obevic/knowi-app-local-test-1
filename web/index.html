@@ -1,109 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inventory Desk</title>
-  <link rel="stylesheet" href="app.css" />
-</head>
-<body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Primary">
-      <div class="sidebar-top">
-        <a class="logo" href="#" aria-label="Knowi home">
-          <svg class="logo-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="12" cy="12" r="9" fill="none" stroke="#375357" stroke-width="2"></circle>
-            <path d="M12 7v10M7 12h10" fill="none" stroke="#375357" stroke-width="2" stroke-linecap="round"></path>
-          </svg>
-          <span class="logo-word">knowi</span>
-        </a>
-        <nav class="nav" aria-label="Sections">
-          <a class="nav-link" href="#">
-            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.6"></path>
-              <path d="M4 10h16M10 5v14" fill="none" stroke="currentColor" stroke-width="1.6"></path>
-            </svg>
-            <span class="nav-label">Inventory</span>
-            <span class="nav-pill" data-count="items">0</span>
-          </a>
-          <a class="nav-link" href="#">
-            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M4 19V5M4 19h16M8 15l3-4 3 2 4-6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
-            </svg>
-            <span class="nav-label">Suppliers</span>
-            <span class="nav-pill" data-count="suppliers">0</span>
-          </a>
-          <a class="nav-link" href="#">
-            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 3l8 4-8 4-8-4 8-4zM4 12l8 4 8-4M4 16l8 4 8-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path>
-            </svg>
-            <span class="nav-label">Stock levels</span>
-            <span class="nav-pill" data-count="risk">0</span>
-          </a>
-        </nav>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Inventory Desk</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <svg class="brand-mark" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+          <path d="M2 2 L14 14 L2 26" fill="none" stroke="#375357" stroke-width="3.2" stroke-linecap="round" />
+          <path d="M26 2 L14 14 L26 26" fill="none" stroke="#4e6e78" stroke-width="3.2" stroke-linecap="round" />
+        </svg>
+        <span class="brand-name">Inventory Desk</span>
       </div>
-      <div class="sidebar-bottom">
-        <div class="viewer">
-          <span class="viewer-avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <circle cx="12" cy="9" r="4" fill="none" stroke="#4E6E78" stroke-width="1.6"></circle>
-              <path d="M5 20c0-3.3 3.1-5 7-5s7 1.7 7 5" fill="none" stroke="#4E6E78" stroke-width="1.6" stroke-linecap="round"></path>
-            </svg>
-          </span>
-          <span class="viewer-name" data-viewer>Viewer</span>
+      <span class="data-badge">Synthetic data</span>
+    </header>
+
+    <main class="app-main">
+      <h1 class="page-title serif">Inventory Desk</h1>
+
+      <div class="controls">
+        <div class="control-field">
+          <label for="search-input">Search item</label>
+          <input type="text" id="search-input" placeholder="Search by item name" autocomplete="off" />
+        </div>
+        <div class="control-field">
+          <label for="supplier-filter">Filter</label>
+          <select id="supplier-filter"></select>
         </div>
       </div>
-    </aside>
-
-    <main class="content">
-      <header class="page-head">
-        <h1 class="page-title">Inventory Desk</h1>
-        <span class="pill pill-synthetic">Synthetic data</span>
-      </header>
-
-      <section class="controls" aria-label="Search and filter">
-        <div class="control-search">
-          <label class="sr-only" for="searchInput">Search by item name</label>
-          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <circle cx="11" cy="11" r="6" fill="none" stroke="#56666D" stroke-width="1.8"></circle>
-            <path d="M15.5 15.5L20 20" fill="none" stroke="#56666D" stroke-width="1.8" stroke-linecap="round"></path>
-          </svg>
-          <input id="searchInput" type="search" placeholder="Search by item name" autocomplete="off" />
-        </div>
-        <div class="control-filter">
-          <label class="sr-only" for="filterSelect">Filter by supplier</label>
-          <select id="filterSelect" aria-label="Filter by supplier">
-            <option value="all">All suppliers</option>
-          </select>
-        </div>
-      </section>
 
       <section class="summary-card" aria-label="Total stock value">
         <span class="summary-label">Total stock value</span>
-        <span class="summary-value" id="totalValue">$0.00</span>
+        <span class="summary-value serif" id="total-stock-value">$0</span>
       </section>
 
-      <section class="table-card" aria-label="Inventory items">
-        <div class="table-scroll">
-          <table class="ledger">
-            <thead>
-              <tr>
-                <th scope="col">Item</th>
-                <th scope="col">Supplier</th>
-                <th scope="col">Quantity</th>
-                <th scope="col">Reorder point</th>
-                <th scope="col">Unit cost</th>
-                <th scope="col">Restock</th>
-              </tr>
-            </thead>
-            <tbody id="tableBody"></tbody>
-          </table>
-        </div>
-        <div class="table-state" id="tableState" hidden></div>
-      </section>
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Item</th>
+              <th scope="col">Supplier</th>
+              <th scope="col">Quantity</th>
+              <th scope="col">Reorder point</th>
+              <th scope="col">Unit cost</th>
+              <th scope="col">Restock</th>
+            </tr>
+          </thead>
+          <tbody id="items-tbody"></tbody>
+        </table>
+        <div class="empty-state" id="empty-state" hidden>No items match your search or filter.</div>
+      </div>
     </main>
-  </div>
 
-  <script src="app.js"></script>
-</body>
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="app.js"></script>
+  </body>
 </html>
