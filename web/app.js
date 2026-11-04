@@ -19,7 +19,8 @@ window.knowiReportReady = false;
     page: 1,
     selectedSupporterId: null,
     loading: true,
-    error: null
+    error: null,
+    activeTab: 'payments'
   };
 
   var el = {};
@@ -56,6 +57,35 @@ window.knowiReportReady = false;
     el.panelName = $('panelName');
     el.panelBody = $('panelBody');
     el.panelClose = $('panelClose');
+
+    // Tab elements
+    el.tabBtnPayments = $('tabBtnPayments');
+    el.tabBtnProjects = $('tabBtnProjects');
+    el.tabBtnRecurring = $('tabBtnRecurring');
+    el.tabBtnLapsed = $('tabBtnLapsed');
+    el.tabPayments = $('tab-payments');
+    el.tabProjects = $('tab-projects');
+    el.tabRecurring = $('tab-recurring');
+    el.tabLapsed = $('tab-lapsed');
+
+    // Projects tab
+    el.projectsState = $('projectsState');
+    el.projectsCard = $('projectsCard');
+    el.projectsMeta = $('projectsMeta');
+    el.projectsBody = $('projectsBody');
+
+    // Recurring tab
+    el.recurringState = $('recurringState');
+    el.recurringCard = $('recurringCard');
+    el.recurringMeta = $('recurringMeta');
+    el.recurringTotal = $('recurringTotal');
+    el.recurringBody = $('recurringBody');
+
+    // Lapsed tab
+    el.lapsedState = $('lapsedState');
+    el.lapsedCard = $('lapsedCard');
+    el.copyEmailsBtn = $('copyEmailsBtn');
+    el.lapsedBody = $('lapsedBody');
   }
 
   function toBool(v) {
@@ -276,6 +306,9 @@ window.knowiReportReady = false;
     renderKpis();
     renderTable();
     renderPanel();
+    renderProjects();
+    renderRecurring();
+    renderLapsed();
     updateResponsive();
     window.knowiReportReady = true;
   }
@@ -610,6 +643,379 @@ window.knowiReportReady = false;
     }
   }
 
+  /* ---------- tab switching ---------- */
+
+  function activateTab(tabName) {
+    state.activeTab = tabName;
+
+    var tabs = [
+      { name: 'payments', btn: el.tabBtnPayments, panel: el.tabPayments },
+      { name: 'projects', btn: el.tabBtnProjects, panel: el.tabProjects },
+      { name: 'recurring', btn: el.tabBtnRecurring, panel: el.tabRecurring },
+      { name: 'lapsed', btn: el.tabBtnLapsed, panel: el.tabLapsed }
+    ];
+
+    tabs.forEach(function (t) {
+      if (t.name === tabName) {
+        t.btn.classList.add('is-active');
+        t.btn.setAttribute('aria-selected', 'true');
+        t.panel.hidden = false;
+      } else {
+        t.btn.classList.remove('is-active');
+        t.btn.setAttribute('aria-selected', 'false');
+        t.panel.hidden = true;
+      }
+    });
+
+    // Re-render the active tab to ensure correct state
+    if (tabName === 'payments') renderTable();
+    else if (tabName === 'projects') renderProjects();
+    else if (tabName === 'recurring') renderRecurring();
+    else if (tabName === 'lapsed') renderLapsed();
+
+    window.knowiReportReady = true;
+  }
+
+  function bindTabEvents() {
+    var tabBtns = [el.tabBtnPayments, el.tabBtnProjects, el.tabBtnRecurring, el.tabBtnLapsed];
+    var tabNames = ['payments', 'projects', 'recurring', 'lapsed'];
+
+    tabBtns.forEach(function (btn, i) {
+      btn.addEventListener('click', function () {
+        activateTab(tabNames[i]);
+      });
+
+      btn.addEventListener('keydown', function (e) {
+        var idx = tabBtns.indexOf(btn);
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          var next = (idx + 1) % tabBtns.length;
+          tabBtns[next].focus();
+          activateTab(tabNames[next]);
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          var prev = (idx - 1 + tabBtns.length) % tabBtns.length;
+          tabBtns[prev].focus();
+          activateTab(tabNames[prev]);
+        }
+      });
+    });
+  }
+
+  /* ---------- projects tab ---------- */
+
+  function renderProjects() {
+    if (state.loading) {
+      el.projectsState.hidden = false;
+      el.projectsState.className = 'state-box state-loading';
+      el.projectsState.innerHTML = '<span class="skel skel-wide"></span>';
+      el.projectsCard.hidden = true;
+      return;
+    }
+
+    if (state.error) {
+      el.projectsState.hidden = false;
+      el.projectsState.className = 'state-box state-error';
+      el.projectsState.textContent = state.error.message || 'Something went wrong.';
+      el.projectsCard.hidden = true;
+      return;
+    }
+
+    el.projectsState.hidden = true;
+    el.projectsState.innerHTML = '';
+
+    if (state.rows.length === 0) {
+      el.projectsState.hidden = false;
+      el.projectsState.className = 'state-box state-empty';
+      el.projectsState.textContent = 'No project data available.';
+      el.projectsCard.hidden = true;
+      return;
+    }
+
+    el.projectsCard.hidden = false;
+
+    // Group by project
+    var projectMap = {};
+    var totalRaisedOverall = 0;
+
+    state.rows.forEach(function (r) {
+      if (!toBool(r.payment_successful) || toBool(r.refund)) return;
+      var proj = str(r.project) || '—';
+      var amt = toNum(r.amount_paid);
+      totalRaisedOverall += amt;
+
+      if (!projectMap[proj]) {
+        projectMap[proj] = {
+          total: 0,
+          gifts: 0,
+          supporters: new Set(),
+          largest: 0
+        };
+      }
+      projectMap[proj].total += amt;
+      projectMap[proj].gifts += 1;
+      if (r.supporter_id != null && r.supporter_id !== '') {
+        projectMap[proj].supporters.add(r.supporter_id);
+      }
+      if (amt > projectMap[proj].largest) {
+        projectMap[proj].largest = amt;
+      }
+    });
+
+    // Build sorted array
+    var projects = Object.keys(projectMap).map(function (name) {
+      var p = projectMap[name];
+      return {
+        name: name,
+        total: p.total,
+        gifts: p.gifts,
+        supporters: p.supporters.size,
+        largest: p.largest,
+        share: totalRaisedOverall > 0 ? (p.total / totalRaisedOverall) * 100 : 0
+      };
+    });
+
+    projects.sort(function (a, b) {
+      return b.total - a.total;
+    });
+
+    el.projectsMeta.textContent = projects.length + ' project' + (projects.length === 1 ? '' : 's');
+
+    if (projects.length === 0) {
+      el.projectsBody.innerHTML = '<tr><td colspan="6" class="empty-cell">No successful payments found.</td></tr>';
+      return;
+    }
+
+    el.projectsBody.innerHTML = projects.map(function (p) {
+      var barWidth = Math.min(100, p.share);
+      return '<tr>' +
+        '<td class="col-project">' + escapeHtml(p.name) + '</td>' +
+        '<td class="num">' + fmtMoney(p.total) + '</td>' +
+        '<td class="num">' + fmtInt(p.gifts) + '</td>' +
+        '<td class="num">' + fmtInt(p.supporters) + '</td>' +
+        '<td class="num">' + fmtMoney(p.largest) + '</td>' +
+        '<td class="col-share">' +
+          '<div class="share-bar" role="img" aria-label="' + p.share.toFixed(1) + '% of total">' +
+            '<div class="share-bar-fill" style="width:' + barWidth.toFixed(1) + '%"></div>' +
+          '</div>' +
+          '<span class="share-pct">' + p.share.toFixed(1) + '%</span>' +
+        '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  /* ---------- recurring tab ---------- */
+
+  function renderRecurring() {
+    if (state.loading) {
+      el.recurringState.hidden = false;
+      el.recurringState.className = 'state-box state-loading';
+      el.recurringState.innerHTML = '<span class="skel skel-wide"></span>';
+      el.recurringCard.hidden = true;
+      return;
+    }
+
+    if (state.error) {
+      el.recurringState.hidden = false;
+      el.recurringState.className = 'state-box state-error';
+      el.recurringState.textContent = state.error.message || 'Something went wrong.';
+      el.recurringCard.hidden = true;
+      return;
+    }
+
+    el.recurringState.hidden = true;
+    el.recurringState.innerHTML = '';
+
+    if (state.rows.length === 0) {
+      el.recurringState.hidden = false;
+      el.recurringState.className = 'state-box state-empty';
+      el.recurringState.textContent = 'No recurring donor data available.';
+      el.recurringCard.hidden = true;
+      return;
+    }
+
+    el.recurringCard.hidden = false;
+
+    // Filter recurring donors
+    var recurringRows = state.rows.filter(function (r) {
+      return toBool(r.recurring_donor);
+    });
+
+    if (recurringRows.length === 0) {
+      el.recurringMeta.textContent = '0 recurring donors';
+      el.recurringTotal.textContent = '';
+      el.recurringBody.innerHTML = '<tr><td colspan="5" class="empty-cell">No recurring donors found.</td></tr>';
+      return;
+    }
+
+    // Compute annualised for each row
+    var annualisedTotal = 0;
+    var rows = recurringRows.map(function (r) {
+      var freq = str(r.recurring_donation_frequency).toLowerCase();
+      var amount = toNum(r.recurring_donation_amount);
+      var annualised;
+
+      if (freq === 'monthly') {
+        annualised = amount * 12;
+      } else if (freq === 'quarterly') {
+        annualised = amount * 4;
+      } else if (freq === 'yearly' || freq === 'annual') {
+        annualised = amount * 1;
+      } else {
+        annualised = null;
+      }
+
+      if (annualised !== null) {
+        annualisedTotal += annualised;
+      }
+
+      return {
+        name: str(r.supporter_name) || '—',
+        frequency: str(r.recurring_donation_frequency) || '—',
+        amount: amount,
+        startDate: r.recurring_donation_start_date ? fmtDate(r.recurring_donation_start_date) : '—',
+        annualised: annualised
+      };
+    });
+
+    el.recurringMeta.textContent = rows.length + ' recurring donor' + (rows.length === 1 ? '' : 's');
+    el.recurringTotal.textContent = 'Annualised total: ' + fmtMoney(annualisedTotal);
+
+    el.recurringBody.innerHTML = rows.map(function (r) {
+      var annText = r.annualised !== null ? fmtMoney(r.annualised) : '–';
+      return '<tr>' +
+        '<td class="col-supporter">' + escapeHtml(r.name) + '</td>' +
+        '<td class="col-frequency">' + escapeHtml(r.frequency) + '</td>' +
+        '<td class="num">' + fmtMoney(r.amount) + '</td>' +
+        '<td class="col-date">' + r.startDate + '</td>' +
+        '<td class="num">' + annText + '</td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  /* ---------- lapsed tab ---------- */
+
+  function renderLapsed() {
+    if (state.loading) {
+      el.lapsedState.hidden = false;
+      el.lapsedState.className = 'state-box state-loading';
+      el.lapsedState.innerHTML = '<span class="skel skel-wide"></span>';
+      el.lapsedCard.hidden = true;
+      return;
+    }
+
+    if (state.error) {
+      el.lapsedState.hidden = false;
+      el.lapsedState.className = 'state-box state-error';
+      el.lapsedState.textContent = state.error.message || 'Something went wrong.';
+      el.lapsedCard.hidden = true;
+      return;
+    }
+
+    el.lapsedState.hidden = true;
+    el.lapsedState.innerHTML = '';
+
+    if (state.rows.length === 0) {
+      el.lapsedState.hidden = false;
+      el.lapsedState.className = 'state-box state-empty';
+      el.lapsedState.textContent = 'No membership data available.';
+      el.lapsedCard.hidden = true;
+      return;
+    }
+
+    el.lapsedCard.hidden = false;
+
+    // Filter lapsed members
+    var lapsedRows = state.rows.filter(function (r) {
+      return toBool(r.has_membership) && !toBool(r.current_member);
+    });
+
+    if (lapsedRows.length === 0) {
+      el.lapsedBody.innerHTML = '<tr><td colspan="4" class="empty-cell">No lapsed members found.</td></tr>';
+      el.copyEmailsBtn.disabled = true;
+      return;
+    }
+
+    el.copyEmailsBtn.disabled = false;
+
+    // Compute days since expiry and sort oldest first
+    var now = Date.now();
+    var rows = lapsedRows.map(function (r) {
+      var expiry = r.membership_expiry_date ? new Date(r.membership_expiry_date) : null;
+      var daysSince = null;
+      if (expiry && !isNaN(expiry.getTime())) {
+        daysSince = Math.floor((now - expiry.getTime()) / (1000 * 60 * 60 * 24));
+      }
+      return {
+        name: str(r.supporter_name) || '—',
+        email: str(r.email) || '',
+        membershipType: str(r.membership_type) || '—',
+        expiryDate: expiry && !isNaN(expiry.getTime()) ? fmtDate(r.membership_expiry_date) : '—',
+        daysSince: daysSince,
+        expiryTime: expiry && !isNaN(expiry.getTime()) ? expiry.getTime() : Infinity
+      };
+    });
+
+    // Sort by oldest expiry first (smallest expiryTime)
+    rows.sort(function (a, b) {
+      return a.expiryTime - b.expiryTime;
+    });
+
+    el.lapsedBody.innerHTML = rows.map(function (r) {
+      var daysText = r.daysSince !== null ? fmtInt(r.daysSince) : '—';
+      return '<tr>' +
+        '<td class="col-supporter">' + escapeHtml(r.name) + '</td>' +
+        '<td class="col-membership-type">' + escapeHtml(r.membershipType) + '</td>' +
+        '<td class="col-date">' + r.expiryDate + '</td>' +
+        '<td class="num">' + daysText + '</td>' +
+        '</tr>';
+    }).join('');
+
+    // Store emails for copy button
+    el._lapsedEmails = rows.map(function (r) { return r.email; }).filter(function (e) { return e; });
+  }
+
+  function copyLapsedEmails() {
+    var emails = el._lapsedEmails || [];
+    if (emails.length === 0) return;
+    var text = emails.join('; ');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        el.copyEmailsBtn.textContent = 'Copied!';
+        setTimeout(function () {
+          el.copyEmailsBtn.textContent = 'Copy emails';
+        }, 2000);
+      }).catch(function () {
+        // Fallback
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        el.copyEmailsBtn.textContent = 'Copied!';
+        setTimeout(function () {
+          el.copyEmailsBtn.textContent = 'Copy emails';
+        }, 2000);
+      });
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) {}
+      document.body.removeChild(ta);
+      el.copyEmailsBtn.textContent = 'Copied!';
+      setTimeout(function () {
+        el.copyEmailsBtn.textContent = 'Copy emails';
+      }, 2000);
+    }
+  }
+
   /* ---------- events ---------- */
 
   function bindEvents() {
@@ -702,6 +1108,12 @@ window.knowiReportReady = false;
         updateResponsive();
       }, 120);
     });
+
+    // Tab events
+    bindTabEvents();
+
+    // Copy emails button
+    el.copyEmailsBtn.addEventListener('click', copyLapsedEmails);
   }
 
   /* ---------- init ---------- */

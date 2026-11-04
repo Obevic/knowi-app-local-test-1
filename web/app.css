@@ -574,6 +574,119 @@ th[aria-sort="descending"] .sort-btn::after {
 .panel-pay-amount { font-size: 14px; font-weight: 600; color: var(--title); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .panel-empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
 
+/* ============ Tab bar ============ */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.tab-btn {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.tab-btn:hover { color: var(--title); }
+.tab-btn.is-active {
+  color: var(--title);
+  border-bottom-color: var(--primary);
+}
+.tab-btn:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* ============ Tab panels ============ */
+.tab-panel { display: block; }
+.tab-panel[hidden] { display: none; }
+
+/* ============ State box (per-tab loading/empty/error) ============ */
+.state-box {
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+.state-box.state-loading { color: var(--muted); }
+.state-box.state-empty { color: var(--muted); }
+.state-box.state-error { color: var(--miss-fg); }
+
+/* ============ Share bar (Projects tab) ============ */
+.col-share { min-width: 140px; }
+.share-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.share-bar-track {
+  flex: 1 1 auto;
+  height: 10px;
+  background: var(--sunken);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.share-bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+.share-pct {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+  min-width: 42px;
+  text-align: right;
+}
+
+/* ============ Recurring tab ============ */
+.recurring-total {
+  padding: 14px 18px;
+  background: var(--sunken);
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 14px;
+  color: var(--muted);
+}
+.recurring-total strong {
+  font-family: var(--serif);
+  font-size: 20px;
+  color: var(--title);
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+.col-frequency { white-space: nowrap; color: var(--text); }
+
+/* ============ Lapsed tab ============ */
+.lapsed-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.col-membership-type { white-space: nowrap; color: var(--text); }
+
+/* ============ Empty cell ============ */
+.empty-cell {
+  color: var(--muted);
+  font-style: italic;
+}
+
 /* ============ Responsive ============ */
 @media (max-width: 860px) {
   .app-shell { flex-direction: column; }
@@ -604,15 +717,20 @@ th[aria-sort="descending"] .sort-btn::after {
   .kpi-strip { grid-template-columns: 1fr 1fr; gap: 10px; }
   .kpi-value { font-size: 22px; }
   .side-panel { width: 100%; }
+  .tab-bar { gap: 0; }
+  .tab-btn { padding: 10px 12px; font-size: 14px; }
+  .table-head-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .lapsed-actions { width: 100%; }
 }
 
 /* ============ Print ============ */
 @media print {
-  .sidebar, .scrim, .side-panel, .filters, .pager, .icon-btn { display: none !important; }
+  .sidebar, .scrim, .side-panel, .filters, .pager, .icon-btn, .tab-bar { display: none !important; }
   .app-shell { display: block; }
   .content { padding: 0; }
   .kpi-card, .table-card { box-shadow: none; }
   .payments-table { min-width: 0; }
+  .tab-panel[hidden] { display: none; }
 }
 
 /* Knowi platform accessibility invariant */
