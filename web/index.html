@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Primary">
+  <div id="app" class="app">
+    <aside id="sidebar" class="sidebar" aria-label="Primary">
       <div class="sidebar-top">
         <div class="brand">
           <span class="brand-mark" aria-hidden="true">
@@ -22,15 +22,16 @@
       </div>
 
       <nav class="nav" aria-label="Sections">
-        <a class="nav-link is-active" href="#" aria-current="page">
+        <a class="nav-link is-active" href="#payments" aria-current="page">
           <span class="nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-              <path d="M3 9h18M8 4v16"></path>
+              <rect x="3" y="6" width="18" height="12" rx="2"></rect>
+              <path d="M3 10h18"></path>
+              <path d="M7 14h4"></path>
             </svg>
           </span>
           <span class="nav-label">Payments</span>
-          <span class="nav-count" id="navCount" data-count aria-hidden="true">–</span>
+          <span id="navCount" class="nav-count" aria-hidden="true">0</span>
         </a>
       </nav>
 
@@ -38,203 +39,145 @@
         <div class="viewer">
           <span class="viewer-avatar" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="8" r="4"></circle>
-              <path d="M4 20c0-3.3 3.6-5 8-5s8 1.7 8 5"></path>
+              <circle cx="12" cy="8" r="3.2"></circle>
+              <path d="M5 19c0-3.3 3.1-5 7-5s7 1.7 7 5"></path>
             </svg>
           </span>
-          <span class="viewer-name" id="viewerName">Signed in</span>
+          <span id="viewerName" class="viewer-name">Viewer</span>
         </div>
       </div>
     </aside>
 
-    <main class="content">
-      <header class="page-head">
-        <div class="page-head-row">
-          <div class="page-head-text">
-            <h1 class="page-title">Supporter Hub</h1>
-            <p class="page-subtitle" id="dateRange">Loading payment dates…</p>
+    <main class="canvas">
+      <div class="content">
+        <header id="header" class="page-header">
+          <div class="header-row">
+            <div class="header-titles">
+              <h1 class="page-title">Supporter Hub</h1>
+              <p id="subtitle" class="page-subtitle">Loading payment history…</p>
+            </div>
+            <span id="previewPill" class="pill pill-preview" hidden>Synthetic preview</span>
           </div>
-          <span class="pill pill-preview" id="previewPill" hidden>Synthetic preview</span>
-        </div>
-      </header>
+        </header>
 
-      <div class="tab-bar" role="tablist" aria-label="Views">
-        <button class="tab-btn is-active" id="tabBtnPayments" role="tab" aria-selected="true" aria-controls="tab-payments" type="button">Payments</button>
-        <button class="tab-btn" id="tabBtnProjects" role="tab" aria-selected="false" aria-controls="tab-projects" type="button">Projects</button>
-        <button class="tab-btn" id="tabBtnRecurring" role="tab" aria-selected="false" aria-controls="tab-recurring" type="button">Recurring</button>
-        <button class="tab-btn" id="tabBtnLapsed" role="tab" aria-selected="false" aria-controls="tab-lapsed" type="button">Lapsed members</button>
-      </div>
-
-      <section class="tab-panel" id="tab-payments" role="tabpanel" aria-labelledby="tabBtnPayments">
         <section class="kpi-strip" aria-label="Key figures">
           <div class="kpi-card">
             <span class="kpi-label">Total raised</span>
-            <span class="kpi-value" id="kpiTotal">–</span>
+            <span id="kpiTotal" class="kpi-value">—</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Supporters</span>
-            <span class="kpi-value" id="kpiSupporters">–</span>
+            <span id="kpiSupporters" class="kpi-value">—</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Recurring donors</span>
-            <span class="kpi-value" id="kpiRecurring">–</span>
+            <span id="kpiRecurring" class="kpi-value">—</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Average gift</span>
-            <span class="kpi-value" id="kpiAvg">–</span>
+            <span id="kpiAvg" class="kpi-value">—</span>
           </div>
         </section>
 
-        <section class="filters" aria-label="Filters">
+        <section class="filter-bar" aria-label="Filters">
           <div class="filter-group filter-search">
             <label class="filter-label" for="searchInput">Search</label>
-            <input type="search" id="searchInput" class="input" placeholder="Name, email or receipt number" autocomplete="off" />
+            <input id="searchInput" class="input" type="search" autocomplete="off"
+                   placeholder="Name, email or receipt number" aria-label="Search supporters" />
           </div>
+
           <div class="filter-group">
-            <label class="filter-label" for="financialYearSelect">Financial year</label>
-            <select id="financialYearSelect" class="input select">
+            <label class="filter-label" for="fySelect">Financial year</label>
+            <select id="fySelect" class="input select" aria-label="Financial year">
               <option value="">All years</option>
             </select>
           </div>
+
           <div class="filter-group">
-            <label class="filter-label" for="paymentMethodSelect">Payment method</label>
-            <select id="paymentMethodSelect" class="input select">
+            <label class="filter-label" for="methodSelect">Payment method</label>
+            <select id="methodSelect" class="input select" aria-label="Payment method">
               <option value="">All methods</option>
             </select>
           </div>
-          <div class="filter-group filter-toggle">
-            <label class="checkbox-label">
-              <input type="checkbox" id="successfulOnly" class="checkbox" checked />
+
+          <div class="filter-group filter-check">
+            <label class="check-label" for="successOnly">
+              <input id="successOnly" class="check" type="checkbox" checked />
               <span>Successful only</span>
             </label>
           </div>
         </section>
 
         <section class="table-card" aria-label="Payments">
-          <div class="table-head-row">
-            <h2 class="card-title">Payments</h2>
-            <span class="table-meta" id="tableMeta" aria-live="polite"></span>
-          </div>
-
-          <div class="table-scroll" id="tableScroll">
-            <table class="payments-table" id="paymentsTable">
-              <thead>
-                <tr>
-                  <th scope="col" data-sort="date" class="sortable" aria-sort="descending"><button class="sort-btn" type="button">Date</button></th>
-                  <th scope="col" data-sort="supporter" class="sortable"><button class="sort-btn" type="button">Supporter</button></th>
-                  <th scope="col" data-sort="project" class="sortable"><button class="sort-btn" type="button">Project</button></th>
-                  <th scope="col" data-sort="method" class="sortable"><button class="sort-btn" type="button">Method</button></th>
-                  <th scope="col" data-sort="amount" class="sortable num"><button class="sort-btn" type="button">Amount</button></th>
-                  <th scope="col" data-sort="fee" class="sortable num"><button class="sort-btn" type="button">Fee</button></th>
-                  <th scope="col" data-sort="status" class="sortable"><button class="sort-btn" type="button">Status</button></th>
-                </tr>
-              </thead>
-              <tbody id="tableBody"></tbody>
-            </table>
-          </div>
-
-          <div class="card-list" id="cardList" hidden></div>
-
-          <div class="table-foot">
-            <span class="table-meta" id="showingMeta" aria-live="polite"></span>
-            <div class="pager">
-              <button class="btn btn-ghost" id="prevBtn" type="button" disabled>Previous</button>
-              <button class="btn btn-ghost" id="nextBtn" type="button" disabled>Next</button>
+          <div id="tableWrap" class="table-wrap">
+            <div class="table-state" id="tableLoading" role="status" aria-live="polite">
+              <div class="skeleton" aria-hidden="true"></div>
+              <span class="state-text">Loading payments…</span>
             </div>
-          </div>
-        </section>
-      </section>
 
-      <section class="tab-panel" id="tab-projects" role="tabpanel" aria-labelledby="tabBtnProjects" hidden>
-        <div class="state-box" id="projectsState" hidden></div>
-        <section class="table-card" id="projectsCard" aria-label="Projects">
-          <div class="table-head-row">
-            <h2 class="card-title">Projects</h2>
-            <span class="table-meta" id="projectsMeta" aria-live="polite"></span>
-          </div>
-          <div class="table-scroll">
-            <table class="payments-table" id="projectsTable">
-              <thead>
-                <tr>
-                  <th scope="col">Project</th>
-                  <th scope="col" class="num">Total raised</th>
-                  <th scope="col" class="num">Gifts</th>
-                  <th scope="col" class="num">Supporters</th>
-                  <th scope="col" class="num">Largest gift</th>
-                  <th scope="col">Share</th>
-                </tr>
-              </thead>
-              <tbody id="projectsBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section class="tab-panel" id="tab-recurring" role="tabpanel" aria-labelledby="tabBtnRecurring" hidden>
-        <div class="state-box" id="recurringState" hidden></div>
-        <section class="table-card" id="recurringCard" aria-label="Recurring donors">
-          <div class="table-head-row">
-            <h2 class="card-title">Recurring donors</h2>
-            <span class="table-meta" id="recurringMeta" aria-live="polite"></span>
-          </div>
-          <div class="recurring-total" id="recurringTotal" aria-live="polite"></div>
-          <div class="table-scroll">
-            <table class="payments-table" id="recurringTable">
-              <thead>
-                <tr>
-                  <th scope="col">Supporter</th>
-                  <th scope="col">Frequency</th>
-                  <th scope="col" class="num">Amount</th>
-                  <th scope="col">Start date</th>
-                  <th scope="col" class="num">Annualised</th>
-                </tr>
-              </thead>
-              <tbody id="recurringBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </section>
-
-      <section class="tab-panel" id="tab-lapsed" role="tabpanel" aria-labelledby="tabBtnLapsed" hidden>
-        <div class="state-box" id="lapsedState" hidden></div>
-        <section class="table-card" id="lapsedCard" aria-label="Lapsed members">
-          <div class="table-head-row">
-            <h2 class="card-title">Lapsed members</h2>
-            <div class="lapsed-actions">
-              <button class="btn btn-ghost" id="copyEmailsBtn" type="button">Copy emails</button>
+            <div class="table-state" id="tableError" role="alert" hidden>
+              <span class="state-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"></circle>
+                  <path d="M12 8v5M12 16h.01"></path>
+                </svg>
+              </span>
+              <span class="state-text">We couldn't load the payments. Please try again.</span>
+              <button type="button" class="btn btn-ghost" data-retry>Retry</button>
             </div>
+
+            <div class="table-state" id="tableEmpty" role="status" hidden>
+              <span class="state-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 7h16M4 12h16M4 17h10"></path>
+                </svg>
+              </span>
+              <span class="state-text">No payments match these filters.</span>
+            </div>
+
+            <div class="table-scroll" id="tableScroll" hidden>
+              <table id="payTable" class="pay-table">
+                <thead id="thead">
+                  <tr>
+                    <th scope="col" data-key="payment_at" class="sortable" aria-sort="descending"><button type="button" class="th-btn">Date</button></th>
+                    <th scope="col" data-key="supporter_name" class="sortable"><button type="button" class="th-btn">Supporter</button></th>
+                    <th scope="col" data-key="project" class="sortable"><button type="button" class="th-btn">Project</button></th>
+                    <th scope="col" data-key="payment_method" class="sortable"><button type="button" class="th-btn">Method</button></th>
+                    <th scope="col" data-key="amount_paid" class="sortable num"><button type="button" class="th-btn">Amount</button></th>
+                    <th scope="col" data-key="fee_amount" class="sortable num"><button type="button" class="th-btn">Fee</button></th>
+                    <th scope="col" data-key="status" class="sortable"><button type="button" class="th-btn">Status</button></th>
+                  </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+              </table>
+            </div>
+
+            <div class="card-list" id="cardList" hidden></div>
           </div>
-          <div class="table-scroll">
-            <table class="payments-table" id="lapsedTable">
-              <thead>
-                <tr>
-                  <th scope="col">Supporter</th>
-                  <th scope="col">Membership type</th>
-                  <th scope="col">Expiry date</th>
-                  <th scope="col" class="num">Days since expiry</th>
-                </tr>
-              </thead>
-              <tbody id="lapsedBody"></tbody>
-            </table>
+
+          <div class="table-footer" id="tableFooter" hidden>
+            <button type="button" id="prevBtn" class="btn btn-ghost" disabled>Previous</button>
+            <span id="pageInfo" class="page-info" aria-live="polite">Showing 0–0 of 0</span>
+            <button type="button" id="nextBtn" class="btn btn-ghost" disabled>Next</button>
           </div>
         </section>
-      </section>
+      </div>
     </main>
-  </div>
 
-  <div class="scrim" id="scrim" hidden></div>
-
-  <aside class="side-panel" id="sidePanel" role="dialog" aria-modal="true" aria-labelledby="panelName" hidden>
-    <div class="panel-head">
-      <h2 class="panel-title" id="panelName">Supporter</h2>
-      <button class="icon-btn" id="panelClose" type="button" aria-label="Close panel">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M6 6l12 12M18 6L6 18"></path>
-        </svg>
-      </button>
+    <div id="sidePanel" class="side-panel" role="dialog" aria-modal="true" aria-labelledby="panelTitle" hidden>
+      <div class="panel-head">
+        <h2 id="panelTitle" class="panel-title">Supporter</h2>
+        <button type="button" id="panelCloseBtn" class="icon-btn" aria-label="Close panel">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 6l12 12M18 6L6 18"></path>
+          </svg>
+        </button>
+      </div>
+      <div id="panelBody" class="panel-body"></div>
     </div>
-    <div class="panel-body" id="panelBody"></div>
-  </aside>
+
+    <div id="panelClose" class="panel-scrim" hidden></div>
+  </div>
 
   <script src="app.js"></script>
 </body>
