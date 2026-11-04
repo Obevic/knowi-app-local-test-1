@@ -355,6 +355,45 @@ button {
   font-variant-numeric: tabular-nums;
 }
 
+/* ---------- Tab bar ---------- */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.tab-btn:hover {
+  color: var(--title);
+}
+
+.tab-btn.is-active {
+  color: var(--title);
+  border-bottom-color: var(--primary);
+}
+
+.tab-panel {
+  display: block;
+}
+
+.tab-panel[hidden] {
+  display: none !important;
+}
+
 /* ---------- Filter bar ---------- */
 .filter-bar {
   display: flex;
@@ -926,6 +965,89 @@ th[aria-sort="descending"] .th-btn::after {
   white-space: nowrap;
 }
 
+/* ---------- Projects tab ---------- */
+.c-share {
+  min-width: 140px;
+}
+
+.bar-track {
+  width: 100%;
+  height: 8px;
+  background: var(--sunken);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.bar-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-top: 4px;
+}
+
+/* ---------- Recurring tab ---------- */
+.recurring-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 16px 18px;
+  margin-bottom: 22px;
+}
+
+.recurring-label {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.recurring-value {
+  font-family: var(--serif);
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--title);
+  font-variant-numeric: tabular-nums;
+}
+
+.c-frequency {
+  white-space: nowrap;
+}
+
+/* ---------- Lapsed tab ---------- */
+.lapsed-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.copy-btn {
+  font-size: 14px;
+  height: 36px;
+  padding: 0 14px;
+}
+
+.c-email {
+  font-size: 14px;
+  color: var(--text);
+  word-break: break-all;
+}
+
+.c-membership-type {
+  white-space: nowrap;
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 860px) {
   .app {
@@ -971,6 +1093,17 @@ th[aria-sort="descending"] .th-btn::after {
   .page-title {
     font-size: 25px;
   }
+
+  .tab-bar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tab-btn {
+    flex: 0 0 auto;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
 }
 
 @media (max-width: 700px) {
@@ -1004,6 +1137,20 @@ th[aria-sort="descending"] .th-btn::after {
   .side-panel {
     width: 100%;
   }
+
+  .recurring-summary {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .recurring-value {
+    font-size: 24px;
+  }
+
+  .lapsed-header {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 420px) {
@@ -1020,7 +1167,9 @@ th[aria-sort="descending"] .th-btn::after {
   .side-panel,
   .panel-scrim,
   .icon-btn,
-  .btn {
+  .btn,
+  .tab-bar,
+  .lapsed-header {
     display: none !important;
   }
 
@@ -1042,6 +1191,10 @@ th[aria-sort="descending"] .th-btn::after {
     box-shadow: none;
     border-color: #ccc;
   }
+
+  .tab-panel[hidden] {
+    display: none !important;
+  }
 }
 
 /* Respect reduced motion */
@@ -1051,6 +1204,9 @@ th[aria-sort="descending"] .th-btn::after {
   }
   .side-panel.is-open {
     animation: none;
+  }
+  .bar-fill {
+    transition: none;
   }
 }
 

@@ -79,87 +79,215 @@
           </div>
         </section>
 
-        <section class="filter-bar" aria-label="Filters">
-          <div class="filter-group filter-search">
-            <label class="filter-label" for="searchInput">Search</label>
-            <input id="searchInput" class="input" type="search" autocomplete="off"
-                   placeholder="Name, email or receipt number" aria-label="Search supporters" />
-          </div>
+        <div id="tabBar" class="tab-bar" role="tablist" aria-label="Data views">
+          <button type="button" class="tab-btn is-active" data-tab="payments" role="tab" aria-selected="true" aria-controls="tabPayments">Payments</button>
+          <button type="button" class="tab-btn" data-tab="projects" role="tab" aria-selected="false" aria-controls="tabProjects">Projects</button>
+          <button type="button" class="tab-btn" data-tab="recurring" role="tab" aria-selected="false" aria-controls="tabRecurring">Recurring</button>
+          <button type="button" class="tab-btn" data-tab="lapsed" role="tab" aria-selected="false" aria-controls="tabLapsed">Lapsed members</button>
+        </div>
 
-          <div class="filter-group">
-            <label class="filter-label" for="fySelect">Financial year</label>
-            <select id="fySelect" class="input select" aria-label="Financial year">
-              <option value="">All years</option>
-            </select>
-          </div>
+        <section id="tabPayments" class="tab-panel" role="tabpanel" aria-labelledby="tabPayments">
+          <section class="filter-bar" aria-label="Filters">
+            <div class="filter-group filter-search">
+              <label class="filter-label" for="searchInput">Search</label>
+              <input id="searchInput" class="input" type="search" autocomplete="off"
+                     placeholder="Name, email or receipt number" aria-label="Search supporters" />
+            </div>
 
-          <div class="filter-group">
-            <label class="filter-label" for="methodSelect">Payment method</label>
-            <select id="methodSelect" class="input select" aria-label="Payment method">
-              <option value="">All methods</option>
-            </select>
-          </div>
+            <div class="filter-group">
+              <label class="filter-label" for="fySelect">Financial year</label>
+              <select id="fySelect" class="input select" aria-label="Financial year">
+                <option value="">All years</option>
+              </select>
+            </div>
 
-          <div class="filter-group filter-check">
-            <label class="check-label" for="successOnly">
-              <input id="successOnly" class="check" type="checkbox" checked />
-              <span>Successful only</span>
-            </label>
-          </div>
+            <div class="filter-group">
+              <label class="filter-label" for="methodSelect">Payment method</label>
+              <select id="methodSelect" class="input select" aria-label="Payment method">
+                <option value="">All methods</option>
+              </select>
+            </div>
+
+            <div class="filter-group filter-check">
+              <label class="check-label" for="successOnly">
+                <input id="successOnly" class="check" type="checkbox" checked />
+                <span>Successful only</span>
+              </label>
+            </div>
+          </section>
+
+          <section class="table-card" aria-label="Payments">
+            <div id="tableWrap" class="table-wrap">
+              <div class="table-state" id="tableLoading" role="status" aria-live="polite">
+                <div class="skeleton" aria-hidden="true"></div>
+                <span class="state-text">Loading payments…</span>
+              </div>
+
+              <div class="table-state" id="tableError" role="alert" hidden>
+                <span class="state-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"></circle>
+                    <path d="M12 8v5M12 16h.01"></path>
+                  </svg>
+                </span>
+                <span class="state-text">We couldn't load the payments. Please try again.</span>
+                <button type="button" class="btn btn-ghost" data-retry>Retry</button>
+              </div>
+
+              <div class="table-state" id="tableEmpty" role="status" hidden>
+                <span class="state-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7h16M4 12h16M4 17h10"></path>
+                  </svg>
+                </span>
+                <span class="state-text">No payments match these filters.</span>
+              </div>
+
+              <div class="table-scroll" id="tableScroll" hidden>
+                <table id="payTable" class="pay-table">
+                  <thead id="thead">
+                    <tr>
+                      <th scope="col" data-key="payment_at" class="sortable" aria-sort="descending"><button type="button" class="th-btn">Date</button></th>
+                      <th scope="col" data-key="supporter_name" class="sortable"><button type="button" class="th-btn">Supporter</button></th>
+                      <th scope="col" data-key="project" class="sortable"><button type="button" class="th-btn">Project</button></th>
+                      <th scope="col" data-key="payment_method" class="sortable"><button type="button" class="th-btn">Method</button></th>
+                      <th scope="col" data-key="amount_paid" class="sortable num"><button type="button" class="th-btn">Amount</button></th>
+                      <th scope="col" data-key="fee_amount" class="sortable num"><button type="button" class="th-btn">Fee</button></th>
+                      <th scope="col" data-key="status" class="sortable"><button type="button" class="th-btn">Status</button></th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody"></tbody>
+                </table>
+              </div>
+
+              <div class="card-list" id="cardList" hidden></div>
+            </div>
+
+            <div class="table-footer" id="tableFooter" hidden>
+              <button type="button" id="prevBtn" class="btn btn-ghost" disabled>Previous</button>
+              <span id="pageInfo" class="page-info" aria-live="polite">Showing 0–0 of 0</span>
+              <button type="button" id="nextBtn" class="btn btn-ghost" disabled>Next</button>
+            </div>
+          </section>
         </section>
 
-        <section class="table-card" aria-label="Payments">
-          <div id="tableWrap" class="table-wrap">
-            <div class="table-state" id="tableLoading" role="status" aria-live="polite">
-              <div class="skeleton" aria-hidden="true"></div>
-              <span class="state-text">Loading payments…</span>
-            </div>
+        <section id="tabProjects" class="tab-panel" role="tabpanel" aria-labelledby="tabProjects" hidden>
+          <section class="table-card" aria-label="Projects">
+            <div class="table-wrap">
+              <div class="table-state" id="projectsLoading" role="status" aria-live="polite">
+                <div class="skeleton" aria-hidden="true"></div>
+                <span class="state-text">Loading projects…</span>
+              </div>
 
-            <div class="table-state" id="tableError" role="alert" hidden>
-              <span class="state-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="12" cy="12" r="9"></circle>
-                  <path d="M12 8v5M12 16h.01"></path>
-                </svg>
-              </span>
-              <span class="state-text">We couldn't load the payments. Please try again.</span>
-              <button type="button" class="btn btn-ghost" data-retry>Retry</button>
-            </div>
+              <div class="table-state" id="projectsEmpty" role="status" hidden>
+                <span class="state-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7h16M4 12h16M4 17h10"></path>
+                  </svg>
+                </span>
+                <span class="state-text">No project data available.</span>
+              </div>
 
-            <div class="table-state" id="tableEmpty" role="status" hidden>
-              <span class="state-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 7h16M4 12h16M4 17h10"></path>
-                </svg>
-              </span>
-              <span class="state-text">No payments match these filters.</span>
+              <div class="table-scroll" id="projectsTable" hidden>
+                <table class="pay-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Project</th>
+                      <th scope="col" class="num">Total raised</th>
+                      <th scope="col" class="num">Gifts</th>
+                      <th scope="col" class="num">Supporters</th>
+                      <th scope="col" class="num">Largest gift</th>
+                      <th scope="col">Share of total</th>
+                    </tr>
+                  </thead>
+                  <tbody id="projectsTbody"></tbody>
+                </table>
+              </div>
             </div>
+          </section>
+        </section>
 
-            <div class="table-scroll" id="tableScroll" hidden>
-              <table id="payTable" class="pay-table">
-                <thead id="thead">
-                  <tr>
-                    <th scope="col" data-key="payment_at" class="sortable" aria-sort="descending"><button type="button" class="th-btn">Date</button></th>
-                    <th scope="col" data-key="supporter_name" class="sortable"><button type="button" class="th-btn">Supporter</button></th>
-                    <th scope="col" data-key="project" class="sortable"><button type="button" class="th-btn">Project</button></th>
-                    <th scope="col" data-key="payment_method" class="sortable"><button type="button" class="th-btn">Method</button></th>
-                    <th scope="col" data-key="amount_paid" class="sortable num"><button type="button" class="th-btn">Amount</button></th>
-                    <th scope="col" data-key="fee_amount" class="sortable num"><button type="button" class="th-btn">Fee</button></th>
-                    <th scope="col" data-key="status" class="sortable"><button type="button" class="th-btn">Status</button></th>
-                  </tr>
-                </thead>
-                <tbody id="tbody"></tbody>
-              </table>
-            </div>
-
-            <div class="card-list" id="cardList" hidden></div>
+        <section id="tabRecurring" class="tab-panel" role="tabpanel" aria-labelledby="tabRecurring" hidden>
+          <div class="recurring-summary">
+            <span class="recurring-label">Annualised total</span>
+            <span id="recurringTotal" class="recurring-value">—</span>
           </div>
+          <section class="table-card" aria-label="Recurring donors">
+            <div class="table-wrap">
+              <div class="table-state" id="recurringLoading" role="status" aria-live="polite">
+                <div class="skeleton" aria-hidden="true"></div>
+                <span class="state-text">Loading recurring donors…</span>
+              </div>
 
-          <div class="table-footer" id="tableFooter" hidden>
-            <button type="button" id="prevBtn" class="btn btn-ghost" disabled>Previous</button>
-            <span id="pageInfo" class="page-info" aria-live="polite">Showing 0–0 of 0</span>
-            <button type="button" id="nextBtn" class="btn btn-ghost" disabled>Next</button>
+              <div class="table-state" id="recurringEmpty" role="status" hidden>
+                <span class="state-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7h16M4 12h16M4 17h10"></path>
+                  </svg>
+                </span>
+                <span class="state-text">No recurring donors found.</span>
+              </div>
+
+              <div class="table-scroll" id="recurringTable" hidden>
+                <table class="pay-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Supporter</th>
+                      <th scope="col">Frequency</th>
+                      <th scope="col" class="num">Amount</th>
+                      <th scope="col">Start date</th>
+                      <th scope="col" class="num">Annualised</th>
+                    </tr>
+                  </thead>
+                  <tbody id="recurringTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section id="tabLapsed" class="tab-panel" role="tabpanel" aria-labelledby="tabLapsed" hidden>
+          <div class="lapsed-header">
+            <button type="button" id="copyEmailsBtn" class="btn btn-ghost copy-btn">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              Copy emails
+            </button>
           </div>
+          <section class="table-card" aria-label="Lapsed members">
+            <div class="table-wrap">
+              <div class="table-state" id="lapsedLoading" role="status" aria-live="polite">
+                <div class="skeleton" aria-hidden="true"></div>
+                <span class="state-text">Loading lapsed members…</span>
+              </div>
+
+              <div class="table-state" id="lapsedEmpty" role="status" hidden>
+                <span class="state-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 7h16M4 12h16M4 17h10"></path>
+                  </svg>
+                </span>
+                <span class="state-text">No lapsed members found.</span>
+              </div>
+
+              <div class="table-scroll" id="lapsedTable" hidden>
+                <table class="pay-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Supporter</th>
+                      <th scope="col">Email</th>
+                      <th scope="col">Membership type</th>
+                      <th scope="col">Expiry date</th>
+                      <th scope="col" class="num">Days since expiry</th>
+                    </tr>
+                  </thead>
+                  <tbody id="lapsedTbody"></tbody>
+                </table>
+              </div>
+            </div>
+          </section>
         </section>
       </div>
     </main>

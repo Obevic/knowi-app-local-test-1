@@ -22,6 +22,7 @@ window.knowiReportReady = false;
     isMobile: false,
     loaded: false,
     error: false,
+    activeTab: 'payments',
   };
 
   var el = {};
@@ -60,6 +61,25 @@ window.knowiReportReady = false;
     el.panelBody = $('panelBody');
     el.panelCloseBtn = $('panelCloseBtn');
     el.panelClose = $('panelClose');
+    el.tabBar = $('tabBar');
+    el.tabPayments = $('tabPayments');
+    el.tabProjects = $('tabProjects');
+    el.tabRecurring = $('tabRecurring');
+    el.tabLapsed = $('tabLapsed');
+    el.projectsTable = $('projectsTable');
+    el.projectsEmpty = $('projectsEmpty');
+    el.projectsLoading = $('projectsLoading');
+    el.projectsTbody = $('projectsTbody');
+    el.recurringTotal = $('recurringTotal');
+    el.recurringTable = $('recurringTable');
+    el.recurringEmpty = $('recurringEmpty');
+    el.recurringLoading = $('recurringLoading');
+    el.recurringTbody = $('recurringTbody');
+    el.lapsedTable = $('lapsedTable');
+    el.lapsedEmpty = $('lapsedEmpty');
+    el.lapsedLoading = $('lapsedLoading');
+    el.lapsedTbody = $('lapsedTbody');
+    el.copyEmailsBtn = $('copyEmailsBtn');
   }
 
   function isMobile() { return window.innerWidth < MOBILE_BP; }
@@ -513,6 +533,9 @@ window.knowiReportReady = false;
         computeKPIs();
         updateSubtitle();
         refresh();
+        renderProjects();
+        renderRecurring();
+        renderLapsed();
         window.knowiReportReady = true;
       })
       .catch(function () {
@@ -581,6 +604,292 @@ window.knowiReportReady = false;
     });
 
     window.addEventListener('resize', handleResize);
+
+    // Tab switching
+    el.tabBar.addEventListener('click', function (e) {
+      var btn = e.target.closest('.tab-btn');
+      if (!btn) return;
+      var tab = btn.getAttribute('data-tab');
+      if (tab === state.activeTab) return;
+      state.activeTab = tab;
+      var tabs = el.tabBar.querySelectorAll('.tab-btn');
+      for (var i = 0; i < tabs.length; i++) {
+        var t = tabs[i];
+        var isActive = t.getAttribute('data-tab') === tab;
+        t.classList.toggle('is-active', isActive);
+        t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      }
+      el.tabPayments.hidden = tab !== 'payments';
+      el.tabProjects.hidden = tab !== 'projects';
+      el.tabRecurring.hidden = tab !== 'recurring';
+      el.tabLapsed.hidden = tab !== 'lapsed';
+    });
+
+    // Copy emails for lapsed members
+    el.copyEmailsBtn.addEventListener('click', function () {
+      var emails = [];
+      var seen = new Set();
+      for (var i = 0; i < state.rows.length; i++) {
+        var r = state.rows[i];
+        if (toBool(r.has_membership) && !toBool(r.current_member)) {
+          var email = r.email;
+          if (email && !seen.has(email)) {
+            seen.add(email);
+            emails.push(email);
+          }
+        }
+      }
+      if (emails.length === 0) return;
+      var text = emails.join('; ');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          el.copyEmailsBtn.textContent = 'Copied!';
+          setTimeout(function () {
+            el.copyEmailsBtn.innerHTML =
+              '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+              '<rect x="9" y="9" width="13" height="13" rx="2"></rect>' +
+              '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+              '</svg> Copy emails';
+          }, 2000);
+        });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        el.copyEmailsBtn.textContent = 'Copied!';
+        setTimeout(function () {
+          el.copyEmailsBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<rect x="9" y="9" width="13" height="13" rx="2"></rect>' +
+            '<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>' +
+            '</svg> Copy emails';
+        }, 2000);
+      }
+    });
+  }
+
+  function renderProjects() {
+    if (!state.loaded) return;
+    if (state.error) {
+      el.projectsLoading.hidden = true;
+      el.projectsEmpty.hidden = true;
+      el.projectsTable.hidden = true;
+      return;
+    }
+    el.projectsLoading.hidden = true;
+
+    var projectMap = {};
+    var totalRaised = 0;
+    for (var i = 0; i < state.rows.length; i++) {
+      var r = state.rows[i];
+      if (!toBool(r.payment_successful) || toBool(r.refund)) continue;
+      var proj = r.project || '—';
+      if (!projectMap[proj]) {
+        projectMap[proj] = { total: 0, gifts: 0, supporters: new Set(), maxGift: 0 };
+      }
+      var amt = toNum(r.amount_paid);
+      projectMap[proj].total += amt;
+      projectMap[proj].gifts++;
+      if (r.supporter_id != null && r.supporter_id !== '') projectMap[proj].supporters.add(String(r.supporter_id));
+      if (amt > projectMap[proj].maxGift) projectMap[proj].maxGift = amt;
+      totalRaised += amt;
+    }
+
+    var projects = [];
+    for (var key in projectMap) {
+      if (!projectMap.hasOwnProperty(key)) continue;
+      projects.push({
+        name: key,
+        total: projectMap[key].total,
+        gifts: projectMap[key].gifts,
+        supporters: projectMap[key].supporters.size,
+        maxGift: projectMap[key].maxGift,
+        share: totalRaised > 0 ? (projectMap[key].total / totalRaised) * 100 : 0,
+      });
+    }
+    projects.sort(function (a, b) { return b.total - a.total; });
+
+    if (projects.length === 0) {
+      el.projectsEmpty.hidden = false;
+      el.projectsTable.hidden = true;
+      return;
+    }
+
+    el.projectsEmpty.hidden = true;
+    el.projectsTable.hidden = false;
+
+    var frag = document.createDocumentFragment();
+    for (var j = 0; j < projects.length; j++) {
+      var p = projects[j];
+      var tr = document.createElement('tr');
+      var barWidth = Math.min(100, p.share).toFixed(1);
+      tr.innerHTML =
+        '<td class="c-project">' + esc(p.name) + '</td>' +
+        '<td class="num">' + esc(fmtMoney(p.total)) + '</td>' +
+        '<td class="num">' + esc(fmtInt(p.gifts)) + '</td>' +
+        '<td class="num">' + esc(fmtInt(p.supporters)) + '</td>' +
+        '<td class="num">' + esc(fmtMoney(p.maxGift)) + '</td>' +
+        '<td class="c-share">' +
+          '<div class="bar-track">' +
+            '<div class="bar-fill" style="width:' + barWidth + '%"></div>' +
+          '</div>' +
+          '<span class="bar-label">' + p.share.toFixed(1) + '%</span>' +
+        '</td>';
+      frag.appendChild(tr);
+    }
+    el.projectsTbody.innerHTML = '';
+    el.projectsTbody.appendChild(frag);
+  }
+
+  function renderRecurring() {
+    if (!state.loaded) return;
+    if (state.error) {
+      el.recurringLoading.hidden = true;
+      el.recurringEmpty.hidden = true;
+      el.recurringTable.hidden = true;
+      return;
+    }
+    el.recurringLoading.hidden = true;
+
+    var recurringMap = {};
+    for (var i = 0; i < state.rows.length; i++) {
+      var r = state.rows[i];
+      if (!toBool(r.recurring_donor)) continue;
+      var id = String(r.supporter_id == null ? '' : r.supporter_id);
+      if (!id) continue;
+      if (!recurringMap[id]) {
+        recurringMap[id] = {
+          name: r.supporter_name || '—',
+          frequency: r.recurring_donation_frequency || '',
+          amount: toNum(r.recurring_donation_amount),
+          startDate: r.recurring_donation_start_date || '',
+        };
+      }
+    }
+
+    var donors = [];
+    var annualisedTotal = 0;
+    for (var key in recurringMap) {
+      if (!recurringMap.hasOwnProperty(key)) continue;
+      var d = recurringMap[key];
+      var freq = String(d.frequency).toLowerCase();
+      var annualised;
+      if (freq === 'monthly') annualised = d.amount * 12;
+      else if (freq === 'quarterly') annualised = d.amount * 4;
+      else if (freq === 'yearly') annualised = d.amount;
+      else annualised = null;
+      if (annualised !== null) annualisedTotal += annualised;
+      donors.push({
+        name: d.name,
+        frequency: d.frequency,
+        amount: d.amount,
+        startDate: d.startDate,
+        annualised: annualised,
+      });
+    }
+
+    el.recurringTotal.textContent = fmtMoney(annualisedTotal);
+
+    if (donors.length === 0) {
+      el.recurringEmpty.hidden = false;
+      el.recurringTable.hidden = true;
+      return;
+    }
+
+    el.recurringEmpty.hidden = true;
+    el.recurringTable.hidden = false;
+
+    var frag = document.createDocumentFragment();
+    for (var j = 0; j < donors.length; j++) {
+      var d = donors[j];
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="c-supporter">' + esc(d.name) + '</td>' +
+        '<td class="c-frequency">' + esc(d.frequency || '—') + '</td>' +
+        '<td class="num">' + esc(fmtMoney(d.amount)) + '</td>' +
+        '<td class="c-date">' + esc(d.startDate ? fmtDate(d.startDate) : '—') + '</td>' +
+        '<td class="num">' + (d.annualised !== null ? esc(fmtMoney(d.annualised)) : '–') + '</td>';
+      frag.appendChild(tr);
+    }
+    el.recurringTbody.innerHTML = '';
+    el.recurringTbody.appendChild(frag);
+  }
+
+  function renderLapsed() {
+    if (!state.loaded) return;
+    if (state.error) {
+      el.lapsedLoading.hidden = true;
+      el.lapsedEmpty.hidden = true;
+      el.lapsedTable.hidden = true;
+      return;
+    }
+    el.lapsedLoading.hidden = true;
+
+    var lapsedMap = {};
+    for (var i = 0; i < state.rows.length; i++) {
+      var r = state.rows[i];
+      if (!toBool(r.has_membership) || toBool(r.current_member)) continue;
+      var id = String(r.supporter_id == null ? '' : r.supporter_id);
+      if (!id) continue;
+      if (!lapsedMap[id]) {
+        lapsedMap[id] = {
+          name: r.supporter_name || '—',
+          email: r.email || '',
+          membershipType: r.membership_type || '',
+          expiryDate: r.membership_expiry_date || '',
+        };
+      }
+    }
+
+    var lapsed = [];
+    for (var key in lapsedMap) {
+      if (!lapsedMap.hasOwnProperty(key)) continue;
+      var d = lapsedMap[key];
+      var expiry = parseDate(d.expiryDate);
+      var daysSince = null;
+      if (expiry) {
+        var now = new Date();
+        daysSince = Math.floor((now.getTime() - expiry.getTime()) / (1000 * 60 * 60 * 24));
+      }
+      lapsed.push({
+        name: d.name,
+        email: d.email,
+        membershipType: d.membershipType,
+        expiryDate: d.expiryDate,
+        expiryTime: expiry ? expiry.getTime() : 0,
+        daysSince: daysSince,
+      });
+    }
+    lapsed.sort(function (a, b) { return a.expiryTime - b.expiryTime; });
+
+    if (lapsed.length === 0) {
+      el.lapsedEmpty.hidden = false;
+      el.lapsedTable.hidden = true;
+      return;
+    }
+
+    el.lapsedEmpty.hidden = true;
+    el.lapsedTable.hidden = false;
+
+    var frag = document.createDocumentFragment();
+    for (var j = 0; j < lapsed.length; j++) {
+      var d = lapsed[j];
+      var tr = document.createElement('tr');
+      tr.innerHTML =
+        '<td class="c-supporter">' + esc(d.name) + '</td>' +
+        '<td class="c-email">' + esc(d.email || '—') + '</td>' +
+        '<td class="c-membership-type">' + esc(d.membershipType || '—') + '</td>' +
+        '<td class="c-date">' + esc(d.expiryDate ? fmtDate(d.expiryDate) : '—') + '</td>' +
+        '<td class="num">' + (d.daysSince !== null ? esc(fmtInt(d.daysSince)) : '—') + '</td>';
+      frag.appendChild(tr);
+    }
+    el.lapsedTbody.innerHTML = '';
+    el.lapsedTbody.appendChild(frag);
   }
 
   function init() {
