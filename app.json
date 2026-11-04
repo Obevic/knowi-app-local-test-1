@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","db":"db.json","bindings":[{"key":"supporters","type":"data","id":16862}],"reportPages":[{"path":"/","title":"Supporter Payments"}]}
+{"v":2,"service":"server/app.mjs","bindings":[{"key":"supporters","type":"data","id":16862}],"reportPages":[{"path":"/","title":"Supporter Hub – Payments"}],"branding":{"name":"Supporter Hub","colors":{"background":"#f3f5f5","surface":"#ffffff","text":"#1e2f35","muted":"#56666d","border":"#dce3e4","button":"#375357","buttonText":"#ffffff"}}}

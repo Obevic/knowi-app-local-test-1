@@ -1,479 +1,658 @@
 window.knowiReportReady = false;
 
 (function () {
-  'use strict';
+  "use strict";
 
-  var PAGE_SIZE = 25;
+  var FIELDS = [
+    "payment_at", "amount_paid", "payment_successful", "refund", "supporter_id",
+    "recurring_donor", "supporter_name", "email", "receipt_number", "financial_year",
+    "payment_method", "anonymous_donation", "project", "fee_amount", "mobile_phone",
+    "supporter_type", "acquisition_date", "recurring_donor_status", "membership_status"
+  ];
 
   var state = {
-    all: [],
-    filtered: [],
-    sort: { key: 'date', dir: 'desc' },
+    columns: [],
+    idx: {},
+    rows: [],
+    viewer: null,
+    loadError: null,
+    sessionExpired: false,
+    filters: { search: "", fy: "", method: "", successfulOnly: true },
+    sortField: "payment_at",
+    sortDir: "desc",
     page: 1,
-    selectedId: null,
-    loading: true,
-    error: null
+    pageSize: 25,
+    panelSupporterId: null
   };
 
-  var els = {};
-  var lastFocused = null;
+  var root = document.getElementById("app");
 
-  // ---------- helpers ----------
-  function $(id) { return document.getElementById(id); }
-
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  function isTrue(v) {
+    return v === true || v === "true" || v === 1 || v === "1";
   }
 
-  function fmtMoney(n) {
-    if (n == null || isNaN(n)) return '–';
-    return Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function val(row, col) {
+    var i = state.idx[col];
+    return i === undefined ? undefined : row[i];
   }
 
-  function fmtInt(n) {
-    if (n == null || isNaN(n)) return '–';
-    return Number(n).toLocaleString('en-US');
-  }
-
-  function parseDate(v) {
-    if (v == null || v === '') return null;
-    var d = new Date(v);
+  function parseDate(s) {
+    if (!s) return null;
+    var d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
   }
 
-  function fmtDate(v) {
-    var d = parseDate(v);
-    if (!d) return '–';
-    var dd = String(d.getDate()).padStart(2, '0');
-    var mm = String(d.getMonth() + 1).padStart(2, '0');
-    var yy = d.getFullYear();
-    return dd + '/' + mm + '/' + yy;
+  function fmtDMY(d) {
+    if (!d) return "—";
+    var dd = String(d.getDate()).padStart(2, "0");
+    var mm = String(d.getMonth() + 1).padStart(2, "0");
+    var yyyy = d.getFullYear();
+    return dd + "/" + mm + "/" + yyyy;
   }
 
-  function fmtDateLong(v) {
-    var d = parseDate(v);
-    if (!d) return '–';
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  function fmtMoney(n) {
+    if (n === null || n === undefined || isNaN(n)) return "—";
+    return Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  function num(v) {
-    if (v == null || v === '') return 0;
-    var n = Number(v);
-    return isNaN(n) ? 0 : n;
+  function fmtInt(n) {
+    return Number(n).toLocaleString("en-US");
   }
 
-  function isTrue(v) {
-    if (v === true) return true;
-    if (typeof v === 'string') {
-      var s = v.trim().toLowerCase();
-      return s === 'true' || s === '1' || s === 'yes' || s === 'y';
-    }
-    return false;
+  function escapeHtml(s) {
+    return String(s === undefined || s === null ? "" : s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
-  function statusOf(r) {
-    if (isTrue(r.refund)) return 'Refunded';
-    if (isTrue(r.payment_successful)) return 'Paid';
-    return 'Failed';
+  function isSuccessfulCreditedRow(row) {
+    return isTrue(val(row, "payment_successful")) && !isTrue(val(row, "refund"));
   }
 
-  function supporterDisplay(r) {
-    return isTrue(r.anonymous_donation) ? 'Anonymous' : (r.supporter_name || 'Anonymous');
+  function leadingYear(s) {
+    var m = String(s).match(/\d{4}/);
+    return m ? Number(m[0]) : -Infinity;
   }
 
-  function statusRank(s) {
-    return s === 'Paid' ? 0 : s === 'Refunded' ? 1 : 2;
-  }
-
-  function cmp(a, b) {
-    if (a < b) return -1;
-    if (a > b) return 1;
-    return 0;
-  }
-
-  function sortVal(r, key) {
-    switch (key) {
-      case 'date': { var d = parseDate(r.payment_at); return d ? d.getTime() : 0; }
-      case 'supporter': return supporterDisplay(r).toLowerCase();
-      case 'project': return String(r.project || '').toLowerCase();
-      case 'method': return String(r.payment_method || '').toLowerCase();
-      case 'amount': return num(r.amount_paid);
-      case 'fee': return num(r.fee_amount);
-      case 'status': return statusRank(statusOf(r));
-      default: return 0;
-    }
-  }
-
-  function sortRows(rows) {
-    var key = state.sort.key, dir = state.sort.dir;
-    var m = dir === 'asc' ? 1 : -1;
-    rows.sort(function (a, b) {
-      var av = sortVal(a, key), bv = sortVal(b, key);
-      var c = cmp(av, bv);
-      if (c !== 0) return c * m;
-      var da = parseDate(a.payment_at), db = parseDate(b.payment_at);
-      var ta = da ? da.getTime() : 0, tb = db ? db.getTime() : 0;
-      if (ta !== tb) return (ta - tb) * m;
-      return 0;
+  function distinctSorted(col, desc) {
+    var set = {};
+    state.rows.forEach(function (r) {
+      var v = val(r, col);
+      if (v !== undefined && v !== null && v !== "") set[v] = true;
     });
-  }
-
-  function applyFilters() {
-    var q = (els.search.value || '').trim().toLowerCase();
-    var year = els.year.value;
-    var method = els.method.value;
-    var successOnly = els.success.checked;
-
-    state.filtered = state.all.filter(function (r) {
-      if (successOnly && !(isTrue(r.payment_successful) && !isTrue(r.refund))) return false;
-      if (year !== 'all' && String(r.financial_year) !== year) return false;
-      if (method !== 'all' && String(r.payment_method) !== method) return false;
-      if (q) {
-        var hay = (String(r.supporter_name || '') + ' ' + String(r.email || '') + ' ' + String(r.receipt_number || '')).toLowerCase();
-        if (hay.indexOf(q) === -1) return false;
+    var arr = Object.keys(set);
+    arr.sort(function (a, b) {
+      if (desc) {
+        var ya = leadingYear(a), yb = leadingYear(b);
+        if (ya !== yb) return yb - ya;
+        return b.localeCompare(a);
       }
-      return true;
+      return a.localeCompare(b);
     });
-    sortRows(state.filtered);
+    return arr;
   }
 
   function computeKpis() {
-    var total = 0, successCount = 0;
-    var supporters = new Set(), recurring = new Set();
-    state.all.forEach(function (r) {
-      if (r.supporter_id != null && r.supporter_id !== '') supporters.add(String(r.supporter_id));
-      if (isTrue(r.recurring_donor) && r.supporter_id != null && r.supporter_id !== '') recurring.add(String(r.supporter_id));
-      if (isTrue(r.payment_successful) && !isTrue(r.refund)) {
-        total += num(r.amount_paid);
-        successCount++;
+    var totalRaised = 0;
+    var successfulCount = 0;
+    var supporterSet = {};
+    var recurringSet = {};
+    state.rows.forEach(function (r) {
+      var sid = val(r, "supporter_id");
+      if (sid !== undefined && sid !== null && sid !== "") supporterSet[sid] = true;
+      if (isSuccessfulCreditedRow(r)) {
+        totalRaised += Number(val(r, "amount_paid")) || 0;
+        successfulCount++;
+      }
+      if (isTrue(val(r, "recurring_donor")) && sid !== undefined && sid !== null && sid !== "") {
+        recurringSet[sid] = true;
       }
     });
-    els.kpiTotal.textContent = fmtMoney(total);
-    els.kpiSupporters.textContent = fmtInt(supporters.size);
-    els.kpiRecurring.textContent = fmtInt(recurring.size);
-    els.kpiAvg.textContent = successCount ? fmtMoney(total / successCount) : '–';
+    var supportersCount = Object.keys(supporterSet).length;
+    var recurringCount = Object.keys(recurringSet).length;
+    var avgGift = successfulCount > 0 ? totalRaised / successfulCount : 0;
+    return {
+      totalRaised: totalRaised,
+      supportersCount: supportersCount,
+      recurringCount: recurringCount,
+      avgGift: avgGift
+    };
   }
 
-  function computeDateRange() {
+  function dateRangeText() {
     var min = null, max = null;
-    state.all.forEach(function (r) {
-      var d = parseDate(r.payment_at);
+    state.rows.forEach(function (r) {
+      var d = parseDate(val(r, "payment_at"));
       if (!d) return;
       if (!min || d < min) min = d;
       if (!max || d > max) max = d;
     });
-    if (min && max) {
-      els.dateRange.textContent = 'Payments from ' + fmtDateLong(min) + ' to ' + fmtDateLong(max);
-    } else {
-      els.dateRange.textContent = 'No payment dates available';
+    if (!min || !max) return "No payment data yet";
+    return "Payments from " + fmtDMY(min) + " to " + fmtDMY(max);
+  }
+
+  function matchesFilters(row) {
+    var f = state.filters;
+    if (f.successfulOnly && !isTrue(val(row, "payment_successful"))) return false;
+    if (f.fy && String(val(row, "financial_year")) !== f.fy) return false;
+    if (f.method && String(val(row, "payment_method")) !== f.method) return false;
+    if (f.search) {
+      var s = f.search.toLowerCase();
+      var hay = [val(row, "supporter_name"), val(row, "email"), val(row, "receipt_number")]
+        .map(function (v) { return v === undefined || v === null ? "" : String(v).toLowerCase(); })
+        .join(" ");
+      if (hay.indexOf(s) === -1) return false;
     }
+    return true;
   }
 
-  function updateNavCounts() {
-    var ov = document.querySelector('[data-count="overview"]');
-    var pay = document.querySelector('[data-count="payments"]');
-    if (ov) ov.textContent = fmtInt(state.all.length);
-    if (pay) pay.textContent = fmtInt(state.filtered.length);
-  }
-
-  function updateSortIndicators() {
-    document.querySelectorAll('.th-btn').forEach(function (b) {
-      var ind = b.querySelector('.sort-ind');
-      if (!ind) return;
-      if (b.getAttribute('data-sort') === state.sort.key) {
-        ind.textContent = state.sort.dir === 'asc' ? '▲' : '▼';
+  function sortRows(rows) {
+    var field = state.sortField;
+    var dir = state.sortDir === "asc" ? 1 : -1;
+    var copy = rows.slice();
+    copy.sort(function (a, b) {
+      var va, vb;
+      if (field === "payment_at") {
+        va = parseDate(val(a, "payment_at"));
+        vb = parseDate(val(b, "payment_at"));
+        va = va ? va.getTime() : -Infinity;
+        vb = vb ? vb.getTime() : -Infinity;
+      } else if (field === "amount_paid" || field === "fee_amount") {
+        va = Number(val(a, field)) || 0;
+        vb = Number(val(b, field)) || 0;
       } else {
-        ind.textContent = '';
+        va = String(val(a, field) === undefined ? "" : val(a, field)).toLowerCase();
+        vb = String(val(b, field) === undefined ? "" : val(b, field)).toLowerCase();
       }
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
     });
+    return copy;
+  }
+
+  function getFilteredSorted() {
+    var filtered = state.rows.filter(matchesFilters);
+    return sortRows(filtered);
+  }
+
+  function statusInfo(row) {
+    if (isTrue(val(row, "refund"))) return { label: "Refunded", cls: "pill-refunded" };
+    if (isTrue(val(row, "payment_successful"))) return { label: "Paid", cls: "pill-paid" };
+    return { label: "Failed", cls: "pill-failed" };
+  }
+
+  function supporterDisplayName(row) {
+    if (isTrue(val(row, "anonymous_donation"))) return "Anonymous";
+    var n = val(row, "supporter_name");
+    return n ? n : "Anonymous";
+  }
+
+  // ---- rendering ----
+
+  function render() {
+    if (state.sessionExpired) {
+      renderSessionExpired();
+      window.knowiReportReady = true;
+      return;
+    }
+    root.innerHTML = buildShell();
+    attachStaticHandlers();
+    if (state.loadError) {
+      renderError();
+    } else if (state.rows.length === 0 && !state.loading) {
+      renderHeader();
+      renderKpis();
+      renderFiltersDisabled();
+      renderTableEmpty();
+    } else {
+      renderHeader();
+      renderKpis();
+      renderFilters();
+      renderTable();
+    }
+    window.knowiReportReady = true;
+  }
+
+  function renderSessionExpired() {
+    root.innerHTML =
+      '<div class="app-shell"><main class="main"><div class="main-inner">' +
+      '<div class="state-box">' +
+      '<h3>Your session has expired</h3>' +
+      '<p>Sign in again to keep working in Supporter Hub.</p>' +
+      '<a class="btn btn-primary" href="login">Sign in again</a>' +
+      '</div></div></main></div>';
+  }
+
+  function navIconSvg() {
+    return '<svg class="icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">' +
+      '<rect x="2" y="4" width="14" height="10" rx="2" stroke="#4E6E78" fill="none" stroke-width="1.5"/>' +
+      '<line x1="2" y1="7.5" x2="16" y2="7.5" stroke="#4E6E78" stroke-width="1.5"/>' +
+      '<circle cx="9" cy="11" r="1.4" fill="#4E6E78"/>' +
+      '</svg>';
+  }
+
+  function brandIconSvg() {
+    return '<svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">' +
+      '<circle cx="11" cy="11" r="9" stroke="#375357" fill="none" stroke-width="1.6"/>' +
+      '<path d="M7 11.5c0 2 1.8 3.5 4 3.5s4-1.5 4-3.5-1.8-2.5-4-3-4-1-4-3 1.8-3.5 4-3.5 4 1.5 4 3.5" ' +
+      'stroke="#375357" fill="none" stroke-width="1.3" stroke-linecap="round"/>' +
+      '</svg>';
+  }
+
+  function buildShell() {
+    var totalCount = state.rows.length;
+    var viewerName = state.viewer && state.viewer.name ? state.viewer.name : "Signed in via Knowi";
+    var viewerEmail = state.viewer && state.viewer.email ? state.viewer.email : "";
+    return (
+      '<div class="app-shell">' +
+      '<aside class="sidebar">' +
+      '<div class="brand">' + brandIconSvg() + '<span>Supporter Hub</span></div>' +
+      '<ul class="nav-list">' +
+      '<li><a class="nav-link is-active" href="#" aria-current="page">' + navIconSvg() +
+      '<span>Payments</span><span class="nav-count">' + fmtInt(totalCount) + '</span></a></li>' +
+      '</ul>' +
+      '<div class="sidebar-footer">' +
+      '<div class="viewer-name">' + escapeHtml(viewerName) + '</div>' +
+      (viewerEmail ? '<div class="viewer-email">' + escapeHtml(viewerEmail) + '</div>' : '') +
+      '</div>' +
+      '</aside>' +
+      '<main class="main"><div class="main-inner" id="main-inner"></div></main>' +
+      '</div>'
+    );
+  }
+
+  function mainInner() { return document.getElementById("main-inner"); }
+
+  function appendHtml(html) {
+    var div = document.createElement("div");
+    div.innerHTML = html;
+    while (div.firstChild) mainInner().appendChild(div.firstChild);
+  }
+
+  function renderHeader() {
+    var showPreviewPill = state.rows.length === 0;
+    appendHtml(
+      '<div class="page-header">' +
+      '<div class="page-header-text">' +
+      '<h1>Supporter Hub</h1>' +
+      '<div class="page-subtitle">' + escapeHtml(dateRangeText()) + '</div>' +
+      '</div>' +
+      (showPreviewPill ? '<span class="pill pill-preview">Synthetic preview</span>' : '') +
+      '</div>'
+    );
+  }
+
+  function renderKpis() {
+    var k = computeKpis();
+    appendHtml(
+      '<section class="kpi-grid" aria-label="Key metrics">' +
+      kpiCard("Total raised", fmtMoney(k.totalRaised)) +
+      kpiCard("Supporters", fmtInt(k.supportersCount)) +
+      kpiCard("Recurring donors", fmtInt(k.recurringCount)) +
+      kpiCard("Average gift", fmtMoney(k.avgGift)) +
+      '</section>'
+    );
+  }
+
+  function kpiCard(label, value) {
+    return '<div class="kpi-card"><div class="kpi-label">' + escapeHtml(label) +
+      '</div><div class="kpi-value">' + value + '</div></div>';
+  }
+
+  function renderFiltersDisabled() {
+    appendHtml('<div class="panel-section"><p style="color:var(--muted); margin:0;">No payments yet to filter.</p></div>');
+  }
+
+  function renderFilters() {
+    var fyOptions = distinctSorted("financial_year", true);
+    var methodOptions = distinctSorted("payment_method", false);
+    var f = state.filters;
+
+    var fyHtml = '<option value="">All years</option>' + fyOptions.map(function (v) {
+      return '<option value="' + escapeHtml(v) + '"' + (f.fy === v ? " selected" : "") + '>' + escapeHtml(v) + '</option>';
+    }).join("");
+
+    var methodHtml = '<option value="">All methods</option>' + methodOptions.map(function (v) {
+      return '<option value="' + escapeHtml(v) + '"' + (f.method === v ? " selected" : "") + '>' + escapeHtml(v) + '</option>';
+    }).join("");
+
+    appendHtml(
+      '<div class="filters-row" role="search">' +
+      '<div class="field field-search">' +
+      '<label for="flt-search">Search</label>' +
+      '<input type="text" id="flt-search" placeholder="Name, email or receipt number" value="' + escapeHtml(f.search) + '">' +
+      '</div>' +
+      '<div class="field">' +
+      '<label for="flt-fy">Financial year</label>' +
+      '<select id="flt-fy">' + fyHtml + '</select>' +
+      '</div>' +
+      '<div class="field">' +
+      '<label for="flt-method">Payment method</label>' +
+      '<select id="flt-method">' + methodHtml + '</select>' +
+      '</div>' +
+      '<div class="field field-checkbox">' +
+      '<input type="checkbox" id="flt-successful"' + (f.successfulOnly ? " checked" : "") + '>' +
+      '<label for="flt-successful">Successful only</label>' +
+      '</div>' +
+      '</div>'
+    );
+
+    document.getElementById("flt-search").addEventListener("input", debounce(function (e) {
+      state.filters.search = e.target.value;
+      state.page = 1;
+      refreshTableOnly();
+    }, 250));
+    document.getElementById("flt-fy").addEventListener("change", function (e) {
+      state.filters.fy = e.target.value;
+      state.page = 1;
+      refreshTableOnly();
+    });
+    document.getElementById("flt-method").addEventListener("change", function (e) {
+      state.filters.method = e.target.value;
+      state.page = 1;
+      refreshTableOnly();
+    });
+    document.getElementById("flt-successful").addEventListener("change", function (e) {
+      state.filters.successfulOnly = e.target.checked;
+      state.page = 1;
+      refreshTableOnly();
+    });
+  }
+
+  var tableHolderId = "table-holder";
+
+  function renderTableEmpty() {
+    appendHtml(
+      '<div id="' + tableHolderId + '">' +
+      '<div class="state-box"><h3>No payments recorded</h3>' +
+      '<p>When payments are recorded against this dataset, they will appear here.</p></div>' +
+      '</div>'
+    );
   }
 
   function renderTable() {
-    var total = state.filtered.length;
-    var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    if (state.page > pages) state.page = pages;
-    if (state.page < 1) state.page = 1;
-    var start = (state.page - 1) * PAGE_SIZE;
-    var end = Math.min(start + PAGE_SIZE, total);
-    var slice = state.filtered.slice(start, end);
-
-    var isMobile = window.matchMedia('(max-width: 699px)').matches;
-    els.tableScroll.hidden = isMobile;
-    els.cardList.hidden = !isMobile;
-
-    if (isMobile) {
-      els.cardList.innerHTML = slice.map(function (r) {
-        var st = statusOf(r);
-        return '<div class="pay-card" data-id="' + esc(r.supporter_id) + '" tabindex="0" role="button" aria-label="View ' + esc(supporterDisplay(r)) + '">' +
-          '<div class="pay-card-top"><span class="pay-card-name">' + esc(supporterDisplay(r)) + '</span>' +
-          '<span class="pill pill-' + st.toLowerCase() + '">' + st + '</span></div>' +
-          '<div class="pay-card-meta">' + esc(r.project || '–') + ' · ' + esc(r.payment_method || '–') + '</div>' +
-          '<div class="pay-card-bottom"><span class="pay-card-date">' + fmtDate(r.payment_at) + '</span>' +
-          '<span class="pay-card-amt">' + fmtMoney(r.amount_paid) + '</span></div></div>';
-      }).join('');
-    } else {
-      els.tableBody.innerHTML = slice.map(function (r) {
-        var st = statusOf(r);
-        return '<tr data-id="' + esc(r.supporter_id) + '" tabindex="0" role="button" aria-label="View ' + esc(supporterDisplay(r)) + '">' +
-          '<td class="c-date">' + fmtDate(r.payment_at) + '</td>' +
-          '<td class="c-supporter">' + esc(supporterDisplay(r)) + '</td>' +
-          '<td class="c-project">' + esc(r.project || '–') + '</td>' +
-          '<td class="c-method">' + esc(r.payment_method || '–') + '</td>' +
-          '<td class="c-amount num">' + fmtMoney(r.amount_paid) + '</td>' +
-          '<td class="c-fee num">' + fmtMoney(r.fee_amount) + '</td>' +
-          '<td class="c-status"><span class="pill pill-' + st.toLowerCase() + '">' + st + '</span></td></tr>';
-      }).join('');
-    }
-
-    els.showing.textContent = total === 0 ? 'Showing 0–0 of 0' : 'Showing ' + (start + 1) + '–' + end + ' of ' + total;
-    els.pageInd.textContent = 'Page ' + state.page + ' of ' + pages;
-    els.prevBtn.disabled = state.page <= 1;
-    els.nextBtn.disabled = state.page >= pages;
-
-    updateSortIndicators();
-    updateNavCounts();
+    appendHtml('<div id="' + tableHolderId + '"></div>');
+    paintTable();
   }
 
-  function showTableState(kind, msg) {
-    els.tableScroll.hidden = true;
-    els.cardList.hidden = true;
-    els.tableState.hidden = false;
-    els.tableState.className = 'table-state ' + kind;
-    els.tableState.innerHTML = msg;
-    els.showing.textContent = 'Showing 0–0 of 0';
-    els.pageInd.textContent = 'Page 1';
-    els.prevBtn.disabled = true;
-    els.nextBtn.disabled = true;
+  function refreshTableOnly() {
+    paintTable();
   }
 
-  function hideTableState() {
-    els.tableState.hidden = true;
-    els.tableState.innerHTML = '';
-  }
+  var columnsDef = [
+    { key: "payment_at", label: "Date", cls: "col-date" },
+    { key: "supporter_name", label: "Supporter", cls: "col-supporter" },
+    { key: "project", label: "Project", cls: "col-project" },
+    { key: "payment_method", label: "Method", cls: "col-method" },
+    { key: "amount_paid", label: "Amount", cls: "col-amount" },
+    { key: "fee_amount", label: "Fee", cls: "col-fee" },
+    { key: "status", label: "Status", cls: "col-status" }
+  ];
 
-  function render() {
-    if (state.loading) {
-      showTableState('loading', '<div class="skeleton" aria-hidden="true"></div><span class="state-text">Loading payments…</span>');
+  function paintTable() {
+    var holder = document.getElementById(tableHolderId);
+    if (!holder) return;
+
+    var filteredSorted = getFilteredSorted();
+    var total = filteredSorted.length;
+
+    if (total === 0) {
+      holder.innerHTML = '<div class="state-box"><h3>No matching payments</h3>' +
+        '<p>Try adjusting your search or filters.</p></div>';
       return;
     }
-    if (state.error) {
-      showTableState('error', '<span class="state-text">Could not load payments. <button class="btn btn-ghost" id="retryBtn">Retry</button></span>');
-      var rb = document.getElementById('retryBtn');
-      if (rb) rb.addEventListener('click', load);
-      return;
-    }
-    hideTableState();
-    if (state.filtered.length === 0) {
-      showTableState('empty', '<span class="state-text">No payments match the current filters.</span>');
-      els.tableScroll.hidden = true;
-      els.cardList.hidden = true;
-      return;
-    }
-    renderTable();
+
+    var totalPages = Math.max(1, Math.ceil(total / state.pageSize));
+    if (state.page > totalPages) state.page = totalPages;
+    var startIdx = (state.page - 1) * state.pageSize;
+    var pageRows = filteredSorted.slice(startIdx, startIdx + state.pageSize);
+
+    var theadHtml = "<tr>" + columnsDef.map(function (c) {
+      var sortable = c.key !== "status";
+      var active = state.sortField === c.key;
+      var arrow = active ? (state.sortDir === "asc" ? "▲" : "▼") : "";
+      var ariaSort = active ? (state.sortDir === "asc" ? "ascending" : "descending") : "none";
+      if (!sortable) {
+        return '<th class="' + c.cls + '">' +
+          '<span class="sort-btn" style="cursor:default;">' + escapeHtml(c.label) + '</span></th>';
+      }
+      return '<th class="' + c.cls + '" aria-sort="' + ariaSort + '">' +
+        '<button type="button" class="sort-btn" data-sort="' + c.key + '">' +
+        escapeHtml(c.label) + (arrow ? ' <span class="arrow">' + arrow + '</span>' : '') +
+        '</button></th>';
+    }).join("") + "</tr>";
+
+    var tbodyHtml = pageRows.map(function (row) {
+      var sid = val(row, "supporter_id");
+      var d = parseDate(val(row, "payment_at"));
+      var st = statusInfo(row);
+      return '<tr tabindex="0" role="button" data-supporter-id="' + escapeHtml(sid) + '" aria-label="View supporter ' + escapeHtml(supporterDisplayName(row)) + '">' +
+        '<td class="col-date" data-label="Date">' + fmtDMY(d) + '</td>' +
+        '<td class="col-supporter" data-label="Supporter">' + escapeHtml(supporterDisplayName(row)) + '</td>' +
+        '<td class="col-project" data-label="Project">' + escapeHtml(val(row, "project") || "—") + '</td>' +
+        '<td class="col-method" data-label="Method">' + escapeHtml(val(row, "payment_method") || "—") + '</td>' +
+        '<td class="col-amount" data-label="Amount">' + fmtMoney(val(row, "amount_paid")) + '</td>' +
+        '<td class="col-fee" data-label="Fee">' + fmtMoney(val(row, "fee_amount")) + '</td>' +
+        '<td class="col-status" data-label="Status"><span class="pill ' + st.cls + '">' + st.label + '</span></td>' +
+        '</tr>';
+    }).join("");
+
+    var showingFrom = startIdx + 1;
+    var showingTo = Math.min(startIdx + state.pageSize, total);
+
+    holder.innerHTML =
+      '<div class="table-wrap"><table><thead>' + theadHtml + '</thead><tbody>' + tbodyHtml + '</tbody></table></div>' +
+      '<div class="pager">' +
+      '<div class="pager-info">Showing ' + fmtInt(showingFrom) + '–' + fmtInt(showingTo) + ' of ' + fmtInt(total) + '</div>' +
+      '<div class="pager-btns">' +
+      '<button type="button" class="btn" id="pager-prev"' + (state.page <= 1 ? " disabled" : "") + '>Previous</button>' +
+      '<button type="button" class="btn" id="pager-next"' + (state.page >= totalPages ? " disabled" : "") + '>Next</button>' +
+      '</div></div>';
+
+    holder.querySelectorAll("[data-sort]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var key = btn.getAttribute("data-sort");
+        if (state.sortField === key) {
+          state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+        } else {
+          state.sortField = key;
+          state.sortDir = key === "payment_at" ? "desc" : "asc";
+        }
+        paintTable();
+      });
+    });
+
+    holder.querySelectorAll("tbody tr").forEach(function (tr) {
+      var open = function () { openPanel(tr.getAttribute("data-supporter-id")); };
+      tr.addEventListener("click", open);
+      tr.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+      });
+    });
+
+    var prevBtn = document.getElementById("pager-prev");
+    var nextBtn = document.getElementById("pager-next");
+    if (prevBtn) prevBtn.addEventListener("click", function () { state.page--; paintTable(); });
+    if (nextBtn) nextBtn.addEventListener("click", function () { state.page++; paintTable(); });
   }
 
-  function openPanel(id) {
-    var rows = state.all.filter(function (r) { return String(r.supporter_id) === String(id); });
-    if (!rows.length) return;
-    var first = rows[0];
-    var lifetime = 0;
-    rows.forEach(function (r) {
-      if (isTrue(r.payment_successful) && !isTrue(r.refund)) lifetime += num(r.amount_paid);
-    });
-    var payments = rows.slice().sort(function (a, b) {
-      var da = parseDate(a.payment_at), db = parseDate(b.payment_at);
-      return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
-    });
+  function renderError() {
+    appendHtml(
+      '<div class="page-header"><div class="page-header-text"><h1>Supporter Hub</h1></div></div>' +
+      '<div class="state-box"><h3>Something went wrong loading payments</h3>' +
+      '<p>' + escapeHtml(state.loadError) + '</p>' +
+      '<button type="button" class="btn btn-primary" id="retry-load">Try again</button>' +
+      '</div>'
+    );
+    document.getElementById("retry-load").addEventListener("click", loadData);
+  }
 
-    var name = isTrue(first.anonymous_donation) ? 'Anonymous' : (first.supporter_name || 'Anonymous');
-    els.panelName.textContent = name;
+  // ---- side panel ----
 
-    var facts = [
-      ['Email', first.email || '–'],
-      ['Mobile', first.mobile_phone || '–'],
-      ['Type', first.supporter_type || '–'],
-      ['Acquired', fmtDateLong(first.acquisition_date)],
-      ['Recurring', first.recurring_donor_status || '–'],
-      ['Membership', first.membership_status || '–']
-    ];
-
-    var html = '<div class="panel-lifetime"><span class="panel-lifetime-label">Lifetime total</span>' +
-      '<span class="panel-lifetime-value">' + fmtMoney(lifetime) + '</span></div>';
-    html += '<dl class="panel-facts">';
-    facts.forEach(function (f) {
-      html += '<div class="fact"><dt>' + esc(f[0]) + '</dt><dd>' + esc(f[1]) + '</dd></div>';
-    });
-    html += '</dl>';
-    html += '<h3 class="panel-sub">Payments (' + payments.length + ')</h3>';
-    html += '<ul class="panel-payments">';
-    payments.forEach(function (r) {
-      html += '<li class="ppay"><span class="ppay-date">' + fmtDate(r.payment_at) + '</span>' +
-        '<span class="ppay-project">' + esc(r.project || '–') + '</span>' +
-        '<span class="ppay-amt">' + fmtMoney(r.amount_paid) + '</span></li>';
-    });
-    html += '</ul>';
-
-    els.panelBody.innerHTML = html;
-    els.panel.hidden = false;
-    els.backdrop.hidden = false;
-    document.body.classList.add('panel-open');
-    els.panelClose.focus();
+  function openPanel(supporterId) {
+    state.panelSupporterId = supporterId;
+    paintPanel();
   }
 
   function closePanel() {
-    els.panel.hidden = true;
-    els.backdrop.hidden = true;
-    document.body.classList.remove('panel-open');
-    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+    state.panelSupporterId = null;
+    var overlay = document.getElementById("panel-overlay");
+    if (overlay) overlay.remove();
+    document.removeEventListener("keydown", onPanelKeydown);
   }
 
-  function buildSelects() {
-    var years = new Set(), methods = new Set();
-    state.all.forEach(function (r) {
-      if (r.financial_year != null && r.financial_year !== '') years.add(String(r.financial_year));
-      if (r.payment_method != null && r.payment_method !== '') methods.add(String(r.payment_method));
+  function onPanelKeydown(e) {
+    if (e.key === "Escape") closePanel();
+  }
+
+  function paintPanel() {
+    var existing = document.getElementById("panel-overlay");
+    if (existing) existing.remove();
+
+    var sid = state.panelSupporterId;
+    var supporterRows = state.rows.filter(function (r) { return String(val(r, "supporter_id")) === String(sid); });
+
+    var overlay = document.createElement("div");
+    overlay.className = "panel-overlay";
+    overlay.id = "panel-overlay";
+
+    if (supporterRows.length === 0) {
+      overlay.innerHTML =
+        '<aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">' +
+        '<div class="panel-header"><h2 id="panel-title" class="serif">Supporter</h2>' +
+        '<button type="button" class="panel-close" aria-label="Close">✕</button></div>' +
+        '<div class="state-box"><h3>Supporter not found</h3><p>This supporter could not be loaded.</p></div>' +
+        '</aside>';
+    } else {
+      var first = supporterRows[0];
+      var lifetime = supporterRows.reduce(function (sum, r) {
+        return sum + (isSuccessfulCreditedRow(r) ? (Number(val(r, "amount_paid")) || 0) : 0);
+      }, 0);
+
+      var paymentsHtml = supporterRows
+        .slice()
+        .sort(function (a, b) {
+          var da = parseDate(val(a, "payment_at"));
+          var db = parseDate(val(b, "payment_at"));
+          return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+        })
+        .map(function (r) {
+          var d = parseDate(val(r, "payment_at"));
+          return '<div class="payment-row">' +
+            '<span>' + fmtDMY(d) + '</span>' +
+            '<span class="proj">' + escapeHtml(val(r, "project") || "—") + '</span>' +
+            '<span>' + fmtMoney(val(r, "amount_paid")) + '</span>' +
+            '</div>';
+        }).join("");
+
+      overlay.innerHTML =
+        '<aside class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">' +
+        '<div class="panel-header">' +
+        '<h2 id="panel-title" class="serif">' + escapeHtml(supporterDisplayName(first)) + '</h2>' +
+        '<button type="button" class="panel-close" aria-label="Close panel">✕</button>' +
+        '</div>' +
+        '<div class="panel-lifetime"><div class="kpi-label">Lifetime total</div>' +
+        '<div class="kpi-value">' + fmtMoney(lifetime) + '</div></div>' +
+        '<dl class="detail-list">' +
+        '<dt>Email</dt><dd>' + escapeHtml(val(first, "email") || "—") + '</dd>' +
+        '<dt>Mobile</dt><dd>' + escapeHtml(val(first, "mobile_phone") || "—") + '</dd>' +
+        '<dt>Supporter type</dt><dd>' + escapeHtml(val(first, "supporter_type") || "—") + '</dd>' +
+        '<dt>Acquired</dt><dd>' + fmtDMY(parseDate(val(first, "acquisition_date"))) + '</dd>' +
+        '<dt>Recurring status</dt><dd>' + escapeHtml(val(first, "recurring_donor_status") || "—") + '</dd>' +
+        '<dt>Membership</dt><dd>' + escapeHtml(val(first, "membership_status") || "—") + '</dd>' +
+        '</dl>' +
+        '<div class="panel-payments"><h3 class="serif">Payments (' + fmtInt(supporterRows.length) + ')</h3>' +
+        paymentsHtml +
+        '</div>' +
+        '</aside>';
+    }
+
+    document.body.appendChild(overlay);
+    overlay.querySelector(".panel-close").addEventListener("click", closePanel);
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) closePanel();
     });
-    var yArr = Array.from(years).sort(function (a, b) { return Number(b) - Number(a); });
-    var mArr = Array.from(methods).sort();
-
-    els.year.innerHTML = '<option value="all">All years</option>' +
-      yArr.map(function (y) { return '<option value="' + esc(y) + '">' + esc(y) + '</option>'; }).join('');
-    els.method.innerHTML = '<option value="all">All methods</option>' +
-      mArr.map(function (m) { return '<option value="' + esc(m) + '">' + esc(m) + '</option>'; }).join('');
+    document.addEventListener("keydown", onPanelKeydown);
+    overlay.querySelector(".panel-close").focus();
   }
 
-  function wireEvents() {
-    els.search.addEventListener('input', function () { state.page = 1; applyFilters(); render(); });
-    els.year.addEventListener('change', function () { state.page = 1; applyFilters(); render(); });
-    els.method.addEventListener('change', function () { state.page = 1; applyFilters(); render(); });
-    els.success.addEventListener('change', function () { state.page = 1; applyFilters(); render(); });
+  function attachStaticHandlers() {}
 
-    els.prevBtn.addEventListener('click', function () { if (state.page > 1) { state.page--; render(); } });
-    els.nextBtn.addEventListener('click', function () { state.page++; render(); });
+  function debounce(fn, ms) {
+    var t;
+    return function () {
+      var args = arguments;
+      clearTimeout(t);
+      t = setTimeout(function () { fn.apply(null, args); }, ms);
+    };
+  }
 
-    document.querySelectorAll('.th-btn').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var key = b.getAttribute('data-sort');
-        if (state.sort.key === key) {
-          state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          state.sort.key = key;
-          state.sort.dir = key === 'date' ? 'desc' : 'asc';
+  function renderLoading() {
+    root.innerHTML = buildShellLoading();
+  }
+
+  function buildShellLoading() {
+    var rows = "";
+    for (var i = 0; i < 6; i++) {
+      rows += '<tr class="skeleton-row"><td colspan="7"><div class="skeleton-bar"></div></td></tr>';
+    }
+    return (
+      '<div class="app-shell">' +
+      '<aside class="sidebar">' +
+      '<div class="brand">' + brandIconSvg() + '<span>Supporter Hub</span></div>' +
+      '</aside>' +
+      '<main class="main"><div class="main-inner">' +
+      '<div class="page-header"><div class="page-header-text"><h1>Supporter Hub</h1>' +
+      '<div class="page-subtitle">Loading payments…</div></div></div>' +
+      '<section class="kpi-grid">' +
+      [1, 2, 3, 4].map(function () {
+        return '<div class="kpi-card"><div class="skeleton-bar" style="width:60%; margin-bottom:12px;"></div><div class="skeleton-bar" style="width:40%; height:22px;"></div></div>';
+      }).join("") +
+      '</section>' +
+      '<div class="table-wrap"><table><tbody>' + rows + '</tbody></table></div>' +
+      '</div></main></div>'
+    );
+  }
+
+  // ---- data loading ----
+
+  function loadData() {
+    state.loadError = null;
+    state.sessionExpired = false;
+    state.loading = true;
+    renderLoading();
+
+    fetch("api/supporters", { headers: { Accept: "application/json" } })
+      .then(function (res) {
+        if (res.status === 401) {
+          state.sessionExpired = true;
+          throw new Error("session-expired");
         }
-        state.page = 1;
-        applyFilters();
+        if (!res.ok) {
+          throw new Error("Request failed with status " + res.status);
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        state.loading = false;
+        state.columns = data.columns || FIELDS;
+        state.idx = {};
+        state.columns.forEach(function (c, i) { state.idx[c] = i; });
+        state.rows = data.rows || [];
+        state.viewer = data.viewer || null;
+        render();
+      })
+      .catch(function (err) {
+        state.loading = false;
+        if (err.message !== "session-expired") {
+          state.loadError = "We couldn't load payment data. Check your connection and try again.";
+        }
         render();
       });
-    });
-
-    function onRowActivate(id) {
-      lastFocused = document.activeElement;
-      openPanel(id);
-    }
-    els.tableBody.addEventListener('click', function (e) {
-      var tr = e.target.closest('tr[data-id]');
-      if (tr) onRowActivate(tr.getAttribute('data-id'));
-    });
-    els.tableBody.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        var tr = e.target.closest('tr[data-id]');
-        if (tr) { e.preventDefault(); onRowActivate(tr.getAttribute('data-id')); }
-      }
-    });
-    els.cardList.addEventListener('click', function (e) {
-      var c = e.target.closest('.pay-card[data-id]');
-      if (c) onRowActivate(c.getAttribute('data-id'));
-    });
-    els.cardList.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        var c = e.target.closest('.pay-card[data-id]');
-        if (c) { e.preventDefault(); onRowActivate(c.getAttribute('data-id')); }
-      }
-    });
-
-    els.panelClose.addEventListener('click', closePanel);
-    els.backdrop.addEventListener('click', closePanel);
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !els.panel.hidden) closePanel();
-    });
-
-    window.matchMedia('(max-width: 699px)').addEventListener('change', function () {
-      if (!state.loading && !state.error) render();
-    });
   }
 
-  async function load() {
-    state.loading = true;
-    state.error = null;
-    render();
-    try {
-      var res = await fetch('api/supporters', { headers: { Accept: 'application/json' } });
-      if (res.status === 401) {
-        state.loading = false;
-        state.error = 'session';
-        showTableState('error', '<span class="state-text">Your session has expired. <a class="link" href="login">Sign in again</a></span>');
-        return;
-      }
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var data = await res.json();
-      var columns = data.columns || [];
-      var rows = data.rows || [];
-      state.all = rows.map(function (row) {
-        var o = {};
-        for (var i = 0; i < columns.length; i++) o[columns[i]] = row[i];
-        return o;
-      });
-      state.loading = false;
-      buildSelects();
-      computeKpis();
-      computeDateRange();
-      els.previewPill.hidden = state.all.length > 0;
-      applyFilters();
-      render();
-    } catch (err) {
-      state.loading = false;
-      state.error = 'error';
-      render();
-    }
-  }
-
-  function init() {
-    els.search = $('searchInput');
-    els.year = $('yearSelect');
-    els.method = $('methodSelect');
-    els.success = $('successOnly');
-    els.kpiTotal = $('kpiTotal');
-    els.kpiSupporters = $('kpiSupporters');
-    els.kpiRecurring = $('kpiRecurring');
-    els.kpiAvg = $('kpiAvg');
-    els.dateRange = $('dateRange');
-    els.previewPill = $('previewPill');
-    els.tableScroll = $('tableScroll');
-    els.cardList = $('cardList');
-    els.tableBody = $('tableBody');
-    els.tableState = $('tableState');
-    els.showing = $('showing');
-    els.pageInd = $('pageInd');
-    els.prevBtn = $('prevBtn');
-    els.nextBtn = $('nextBtn');
-    els.panel = $('sidePanel');
-    els.panelName = $('panelName');
-    els.panelBody = $('panelBody');
-    els.panelClose = $('panelClose');
-    els.backdrop = $('panelBackdrop');
-
-    wireEvents();
-    load().then(function () { window.knowiReportReady = true; });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  loadData();
 })();
