@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[{"key":"supporters","type":"data","id":16862}],"reportPages":[{"path":"/","title":"Supporter Hub"}]}
+{"v":2,"service":"server/app.mjs","db":"db.json","bindings":[{"key":"supporters","type":"data","id":16862}],"reportPages":[{"path":"/","title":"Supporter Payments"}]}
