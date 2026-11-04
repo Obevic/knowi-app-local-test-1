@@ -1,83 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Inventory Desk</title>
-  <link rel="stylesheet" href="app.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supporter Hub</title>
+  <link rel="stylesheet" href="app.css" />
 </head>
 <body>
-  <header class="app-header">
-    <div class="brand">
-      <svg class="brand-logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
-        <g stroke-width="2.4" stroke-linecap="round">
-          <line x1="12" y1="3" x2="12" y2="21" stroke="#e0533d"></line>
-          <line x1="3" y1="12" x2="21" y2="12" stroke="#3f7fd6"></line>
-          <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="#e0a53d"></line>
-          <line x1="18.4" y1="5.6" x2="5.6" y2="18.4" stroke="#4fae7e"></line>
-        </g>
-        <circle cx="12" cy="12" r="2.4" fill="#1f2d3d"></circle>
-      </svg>
-      <span class="brand-word">knowi</span>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary">
+      <div class="sidebar-top">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20s-7-4.35-7-9.5A4 4 0 0 1 12 8a4 4 0 0 1 7 2.5C19 15.65 12 20 12 20Z"></path>
+              <path d="M12 8V4M10 6h4"></path>
+            </svg>
+          </span>
+          <span class="brand-name">Supporter Hub</span>
+        </div>
+      </div>
+
+      <nav class="nav" aria-label="Sections">
+        <a class="nav-link is-active" href="#" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+              <path d="M3 9h18M8 4v16"></path>
+            </svg>
+          </span>
+          <span class="nav-label">Payments</span>
+          <span class="nav-count" id="navCount" data-count aria-hidden="true">–</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="viewer">
+          <span class="viewer-avatar" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="8" r="4"></circle>
+              <path d="M4 20c0-3.3 3.6-5 8-5s8 1.7 8 5"></path>
+            </svg>
+          </span>
+          <span class="viewer-name" id="viewerName">Signed in</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <header class="page-head">
+        <div class="page-head-row">
+          <div class="page-head-text">
+            <h1 class="page-title">Supporter Hub</h1>
+            <p class="page-subtitle" id="dateRange">Loading payment dates…</p>
+          </div>
+          <span class="pill pill-preview" id="previewPill" hidden>Synthetic preview</span>
+        </div>
+      </header>
+
+      <section class="kpi-strip" aria-label="Key figures">
+        <div class="kpi-card">
+          <span class="kpi-label">Total raised</span>
+          <span class="kpi-value" id="kpiTotal">–</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Supporters</span>
+          <span class="kpi-value" id="kpiSupporters">–</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Recurring donors</span>
+          <span class="kpi-value" id="kpiRecurring">–</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Average gift</span>
+          <span class="kpi-value" id="kpiAvg">–</span>
+        </div>
+      </section>
+
+      <section class="filters" aria-label="Filters">
+        <div class="filter-group filter-search">
+          <label class="filter-label" for="searchInput">Search</label>
+          <input type="search" id="searchInput" class="input" placeholder="Name, email or receipt number" autocomplete="off" />
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="financialYearSelect">Financial year</label>
+          <select id="financialYearSelect" class="input select">
+            <option value="">All years</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label class="filter-label" for="paymentMethodSelect">Payment method</label>
+          <select id="paymentMethodSelect" class="input select">
+            <option value="">All methods</option>
+          </select>
+        </div>
+        <div class="filter-group filter-toggle">
+          <label class="checkbox-label">
+            <input type="checkbox" id="successfulOnly" class="checkbox" checked />
+            <span>Successful only</span>
+          </label>
+        </div>
+      </section>
+
+      <section class="table-card" aria-label="Payments">
+        <div class="table-head-row">
+          <h2 class="card-title">Payments</h2>
+          <span class="table-meta" id="tableMeta" aria-live="polite"></span>
+        </div>
+
+        <div class="table-scroll" id="tableScroll">
+          <table class="payments-table" id="paymentsTable">
+            <thead>
+              <tr>
+                <th scope="col" data-sort="date" class="sortable" aria-sort="descending"><button class="sort-btn" type="button">Date</button></th>
+                <th scope="col" data-sort="supporter" class="sortable"><button class="sort-btn" type="button">Supporter</button></th>
+                <th scope="col" data-sort="project" class="sortable"><button class="sort-btn" type="button">Project</button></th>
+                <th scope="col" data-sort="method" class="sortable"><button class="sort-btn" type="button">Method</button></th>
+                <th scope="col" data-sort="amount" class="sortable num"><button class="sort-btn" type="button">Amount</button></th>
+                <th scope="col" data-sort="fee" class="sortable num"><button class="sort-btn" type="button">Fee</button></th>
+                <th scope="col" data-sort="status" class="sortable"><button class="sort-btn" type="button">Status</button></th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="card-list" id="cardList" hidden></div>
+
+        <div class="table-foot">
+          <span class="table-meta" id="showingMeta" aria-live="polite"></span>
+          <div class="pager">
+            <button class="btn btn-ghost" id="prevBtn" type="button" disabled>Previous</button>
+            <button class="btn btn-ghost" id="nextBtn" type="button" disabled>Next</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="scrim" id="scrim" hidden></div>
+
+  <aside class="side-panel" id="sidePanel" role="dialog" aria-modal="true" aria-labelledby="panelName" hidden>
+    <div class="panel-head">
+      <h2 class="panel-title" id="panelName">Supporter</h2>
+      <button class="icon-btn" id="panelClose" type="button" aria-label="Close panel">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </button>
     </div>
-    <span class="badge">Synthetic data</span>
-  </header>
-
-  <main class="page">
-    <h1 class="page-title">Inventory Desk</h1>
-
-    <div class="controls">
-      <div class="control">
-        <label class="control-label" for="search-input">Search item</label>
-        <input type="text" id="search-input" class="text-input" placeholder="Search by item name" autocomplete="off">
-      </div>
-      <div class="control">
-        <label class="control-label" for="filter-select">Filter</label>
-        <select id="filter-select" class="select-input">
-          <option value="All">All</option>
-        </select>
-      </div>
-    </div>
-
-    <section class="total-card" aria-label="Total stock value">
-      <span class="total-label">Total stock value</span>
-      <span class="total-figure" id="total-value">$0</span>
-    </section>
-
-    <section class="table-card">
-      <div class="table-wrap">
-        <table class="items-table" id="items-table">
-          <thead>
-            <tr>
-              <th scope="col">Item</th>
-              <th scope="col">Supplier</th>
-              <th scope="col">Quantity</th>
-              <th scope="col">Reorder point</th>
-              <th scope="col">Unit cost</th>
-              <th scope="col">Restock</th>
-            </tr>
-          </thead>
-          <tbody id="items-body"></tbody>
-        </table>
-      </div>
-
-      <div class="state" id="loading-state" role="status">
-        <span class="spinner" aria-hidden="true"></span>
-        <span>Loading inventory&hellip;</span>
-      </div>
-
-      <div class="state" id="empty-state" role="status" hidden>
-        <p class="state-title">No items match your search</p>
-        <p class="state-body">Try a different name or clear the filter to see the full list.</p>
-      </div>
-
-      <div class="state state-error" id="error-state" role="alert" hidden>
-        <p class="state-title">Couldn&rsquo;t load inventory</p>
-        <p class="state-body">Something went wrong while fetching items. Please try again.</p>
-        <button type="button" class="btn btn-primary" id="retry-btn">Retry</button>
-      </div>
-    </section>
-  </main>
+    <div class="panel-body" id="panelBody"></div>
+  </aside>
 
   <script src="app.js"></script>
 </body>

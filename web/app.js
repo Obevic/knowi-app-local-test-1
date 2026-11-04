@@ -3,28 +3,114 @@ window.knowiReportReady = false;
 (function () {
   'use strict';
 
-  var allItems = [];
-  var PAGE_SIZE = 50;
-  var currentPage = 1;
+  var CURRENCY = 'AUD';
+  var PAGE_SIZE = 25;
+  var MOBILE_BP = 700;
 
-  var searchInput = document.getElementById('search-input');
-  var filterSelect = document.getElementById('filter-select');
-  var totalValue = document.getElementById('total-value');
-  var itemsBody = document.getElementById('items-body');
-  var itemsTable = document.getElementById('items-table');
-  var tableWrap = document.querySelector('.table-wrap');
-  var loadingState = document.getElementById('loading-state');
-  var emptyState = document.getElementById('empty-state');
-  var errorState = document.getElementById('error-state');
-  var retryBtn = document.getElementById('retry-btn');
-  var showMoreBtn = null;
+  var state = {
+    rows: [],
+    columns: [],
+    search: '',
+    financialYear: '',
+    paymentMethod: '',
+    successfulOnly: true,
+    sortField: 'date',
+    sortDir: 'desc',
+    page: 1,
+    selectedSupporterId: null,
+    loading: true,
+    error: null
+  };
 
-  function formatCurrency(n) {
-    return '$' + Math.round(n).toLocaleString('en-US');
+  var el = {};
+  var moneyFmt;
+  var intFmt;
+  var lastFocused = null;
+
+  /* ---------- helpers ---------- */
+
+  function $(id) { return document.getElementById(id); }
+
+  function cacheEls() {
+    el.dateRange = $('dateRange');
+    el.previewPill = $('previewPill');
+    el.navCount = $('navCount');
+    el.viewerName = $('viewerName');
+    el.kpiTotal = $('kpiTotal');
+    el.kpiSupporters = $('kpiSupporters');
+    el.kpiRecurring = $('kpiRecurring');
+    el.kpiAvg = $('kpiAvg');
+    el.searchInput = $('searchInput');
+    el.financialYearSelect = $('financialYearSelect');
+    el.paymentMethodSelect = $('paymentMethodSelect');
+    el.successfulOnly = $('successfulOnly');
+    el.tableMeta = $('tableMeta');
+    el.tableScroll = $('tableScroll');
+    el.tableBody = $('tableBody');
+    el.cardList = $('cardList');
+    el.showingMeta = $('showingMeta');
+    el.prevBtn = $('prevBtn');
+    el.nextBtn = $('nextBtn');
+    el.scrim = $('scrim');
+    el.sidePanel = $('sidePanel');
+    el.panelName = $('panelName');
+    el.panelBody = $('panelBody');
+    el.panelClose = $('panelClose');
+  }
+
+  function toBool(v) {
+    if (v === true || v === false) return v;
+    if (typeof v === 'string') {
+      var s = v.trim().toLowerCase();
+      return s === 'true' || s === '1' || s === 'yes' || s === 'y';
+    }
+    if (typeof v === 'number') return v !== 0;
+    return false;
+  }
+
+  function toNum(v) {
+    if (typeof v === 'number') return isFinite(v) ? v : 0;
+    if (typeof v === 'string') {
+      var n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+      return isNaN(n) ? 0 : n;
+    }
+    return 0;
+  }
+
+  function str(v) { return v == null ? '' : String(v); }
+
+  function fmtDate(v) {
+    if (!v) return '—';
+    var d = new Date(v);
+    if (isNaN(d.getTime())) return str(v);
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var yyyy = d.getFullYear();
+    return dd + '/' + mm + '/' + yyyy;
+  }
+
+  function fmtMoney(v) {
+    if (v == null || isNaN(v)) return '—';
+    return moneyFmt.format(v);
+  }
+
+  function fmtInt(v) {
+    if (v == null || isNaN(v)) return '—';
+    return intFmt.format(v);
+  }
+
+  function statusOf(r) {
+    if (toBool(r.refund)) return 'Refunded';
+    if (toBool(r.payment_successful)) return 'Paid';
+    return 'Failed';
+  }
+
+  function supporterDisplay(r) {
+    return toBool(r.anonymous_donation) ? 'Anonymous' : (str(r.supporter_name) || '—');
   }
 
   function escapeHtml(s) {
-    return String(s)
+    return String(s == null ? '' : s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -32,235 +118,605 @@ window.knowiReportReady = false;
       .replace(/'/g, '&#39;');
   }
 
-  function buildFilterOptions() {
-    var suppliers = [];
-    var seen = {};
-    for (var i = 0; i < allItems.length; i++) {
-      var s = allItems[i].supplier;
-      if (!seen[s]) {
-        seen[s] = true;
-        suppliers.push(s);
-      }
-    }
-    suppliers.sort(function (a, b) {
-      return a < b ? -1 : a > b ? 1 : 0;
+  function isMobile() { return window.innerWidth < MOBILE_BP; }
+
+  /* ---------- data ---------- */
+
+  function zipRows(columns, rows) {
+    return rows.map(function (row) {
+      var obj = {};
+      for (var i = 0; i < columns.length; i++) obj[columns[i]] = row[i];
+      return obj;
     });
-
-    filterSelect.innerHTML = '';
-    var allOpt = document.createElement('option');
-    allOpt.value = 'All';
-    allOpt.textContent = 'All';
-    filterSelect.appendChild(allOpt);
-
-    for (var j = 0; j < suppliers.length; j++) {
-      var opt = document.createElement('option');
-      opt.value = suppliers[j];
-      opt.textContent = suppliers[j];
-      filterSelect.appendChild(opt);
-    }
   }
 
-  function getFilteredItems() {
-    var term = (searchInput.value || '').trim().toLowerCase();
-    var filter = filterSelect.value || 'All';
+  function loadData() {
+    state.loading = true;
+    state.error = null;
+    render();
+    fetch('api/supporters', { headers: { Accept: 'application/json' } })
+      .then(function (res) {
+        if (res.status === 401) {
+          state.loading = false;
+          state.error = { code: 401 };
+          render();
+          return;
+        }
+        return res.json().then(function (data) {
+          if (!res.ok) throw new Error('Request failed');
+          state.columns = data.columns || [];
+          state.rows = zipRows(state.columns, data.rows || []);
+          state.loading = false;
+          state.error = null;
+          buildFilters();
+          render();
+        });
+      })
+      .catch(function (err) {
+        state.loading = false;
+        state.error = { message: err.message || 'Could not load supporter data.' };
+        render();
+      });
+  }
 
-    return allItems.filter(function (it) {
-      if (filter !== 'All' && it.supplier !== filter) return false;
-      if (term && it.item.toLowerCase().indexOf(term) === -1) return false;
+  /* ---------- derived data ---------- */
+
+  function computeKpis() {
+    var totalRaised = 0;
+    var successfulCount = 0;
+    var supporters = new Set();
+    var recurring = new Set();
+    state.rows.forEach(function (r) {
+      if (r.supporter_id != null && r.supporter_id !== '') supporters.add(r.supporter_id);
+      if (toBool(r.recurring_donor) && r.supporter_id != null && r.supporter_id !== '') recurring.add(r.supporter_id);
+      if (toBool(r.payment_successful) && !toBool(r.refund)) {
+        totalRaised += toNum(r.amount_paid);
+        successfulCount += 1;
+      }
+    });
+    return {
+      totalRaised: totalRaised,
+      supporters: supporters.size,
+      recurring: recurring.size,
+      avgGift: successfulCount ? totalRaised / successfulCount : 0
+    };
+  }
+
+  function dateRange() {
+    var min = null, max = null;
+    state.rows.forEach(function (r) {
+      if (!r.payment_at) return;
+      var t = new Date(r.payment_at).getTime();
+      if (isNaN(t)) return;
+      if (min === null || t < min) min = t;
+      if (max === null || t > max) max = t;
+    });
+    if (min === null || max === null) return null;
+    return { min: new Date(min), max: new Date(max) };
+  }
+
+  function distinctValues(field) {
+    var set = new Set();
+    state.rows.forEach(function (r) {
+      var v = r[field];
+      if (v != null && v !== '') set.add(String(v));
+    });
+    return Array.from(set);
+  }
+
+  function buildFilters() {
+    // Financial year: newest first + "All years"
+    var years = distinctValues('financial_year').sort(function (a, b) {
+      return String(b).localeCompare(String(a));
+    });
+    el.financialYearSelect.innerHTML = '<option value="">All years</option>';
+    years.forEach(function (y) {
+      var opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      el.financialYearSelect.appendChild(opt);
+    });
+
+    // Payment method
+    var methods = distinctValues('payment_method').sort(function (a, b) {
+      return a.localeCompare(b);
+    });
+    el.paymentMethodSelect.innerHTML = '<option value="">All methods</option>';
+    methods.forEach(function (m) {
+      var opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = m;
+      el.paymentMethodSelect.appendChild(opt);
+    });
+  }
+
+  function filteredRows() {
+    var q = state.search.trim().toLowerCase();
+    return state.rows.filter(function (r) {
+      if (state.successfulOnly && !(toBool(r.payment_successful) && !toBool(r.refund))) return false;
+      if (state.financialYear && str(r.financial_year) !== state.financialYear) return false;
+      if (state.paymentMethod && str(r.payment_method) !== state.paymentMethod) return false;
+      if (q) {
+        var hay = (str(r.supporter_name) + ' ' + str(r.email) + ' ' + str(r.receipt_number)).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
       return true;
     });
   }
 
-  function computeTotal() {
-    var total = 0;
-    for (var i = 0; i < allItems.length; i++) {
-      total += allItems[i].quantity * allItems[i].unitCost;
-    }
-    return total;
-  }
-
-  function updateTotal() {
-    totalValue.textContent = formatCurrency(computeTotal());
-  }
-
-  function showLoading() {
-    loadingState.hidden = false;
-    emptyState.hidden = true;
-    errorState.hidden = true;
-    if (tableWrap) tableWrap.hidden = true;
-    if (showMoreBtn) showMoreBtn.hidden = true;
-  }
-
-  function showError() {
-    loadingState.hidden = true;
-    emptyState.hidden = true;
-    errorState.hidden = false;
-    if (tableWrap) tableWrap.hidden = true;
-    if (showMoreBtn) showMoreBtn.hidden = true;
-  }
-
-  function renderRows(filtered) {
-    itemsBody.innerHTML = '';
-    var end = Math.min(currentPage * PAGE_SIZE, filtered.length);
-    for (var i = 0; i < end; i++) {
-      itemsBody.appendChild(buildRow(filtered[i]));
+  function sortValue(r, field) {
+    switch (field) {
+      case 'date': return new Date(r.payment_at).getTime() || 0;
+      case 'supporter': return supporterDisplay(r).toLowerCase();
+      case 'project': return str(r.project).toLowerCase();
+      case 'method': return str(r.payment_method).toLowerCase();
+      case 'amount': return toNum(r.amount_paid);
+      case 'fee': return toNum(r.fee_amount);
+      case 'status': return statusOf(r);
+      default: return 0;
     }
   }
 
-  function buildRow(it) {
-    var tr = document.createElement('tr');
-    tr.dataset.id = it.id;
-
-    var tdItem = document.createElement('td');
-    tdItem.className = 'cell-item';
-    tdItem.textContent = it.item;
-
-    var tdSupplier = document.createElement('td');
-    tdSupplier.className = 'cell-supplier';
-    tdSupplier.textContent = it.supplier;
-
-    var tdQty = document.createElement('td');
-    tdQty.className = 'cell-qty';
-    var qtyInput = document.createElement('input');
-    qtyInput.type = 'number';
-    qtyInput.min = '0';
-    qtyInput.step = '1';
-    qtyInput.value = it.quantity;
-    qtyInput.className = 'qty-input';
-    qtyInput.setAttribute('aria-label', 'Quantity for ' + it.item);
-    qtyInput.addEventListener('change', function () {
-      var v = parseInt(qtyInput.value, 10);
-      if (isNaN(v) || v < 0) {
-        qtyInput.value = it.quantity;
-        return;
-      }
-      qtyInput.disabled = true;
-      fetch('api/items/' + it.id + '/quantity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quantity: v })
-      })
-        .then(function (r) {
-          if (!r.ok) throw new Error('bad status');
-          return r.json();
-        })
-        .then(function (data) {
-          it.quantity = data.quantity;
-          qtyInput.value = data.quantity;
-          updateTotal();
-        })
-        .catch(function () {
-          qtyInput.value = it.quantity;
-        })
-        .finally(function () {
-          qtyInput.disabled = false;
-        });
+  function sortedRows(rows) {
+    var dir = state.sortDir === 'asc' ? 1 : -1;
+    var field = state.sortField;
+    return rows.slice().sort(function (a, b) {
+      var av = sortValue(a, field);
+      var bv = sortValue(b, field);
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
     });
-    tdQty.appendChild(qtyInput);
-
-    var tdReorder = document.createElement('td');
-    tdReorder.className = 'cell-reorder';
-    tdReorder.textContent = it.reorderPoint;
-
-    var tdCost = document.createElement('td');
-    tdCost.className = 'cell-cost';
-    tdCost.textContent = formatCurrency(it.unitCost);
-
-    var tdRestock = document.createElement('td');
-    tdRestock.className = 'cell-restock';
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-restock';
-    btn.textContent = 'Restock';
-    btn.setAttribute('aria-label', 'Restock ' + it.item);
-    btn.addEventListener('click', function () {
-      btn.disabled = true;
-      fetch('api/items/' + it.id + '/restock', { method: 'POST' })
-        .then(function (r) {
-          if (!r.ok) throw new Error('bad status');
-          return r.json();
-        })
-        .then(function (data) {
-          it.quantity = data.quantity;
-          qtyInput.value = data.quantity;
-          updateTotal();
-        })
-        .catch(function () {})
-        .finally(function () {
-          btn.disabled = false;
-        });
-    });
-    tdRestock.appendChild(btn);
-
-    tr.appendChild(tdItem);
-    tr.appendChild(tdSupplier);
-    tr.appendChild(tdQty);
-    tr.appendChild(tdReorder);
-    tr.appendChild(tdCost);
-    tr.appendChild(tdRestock);
-    return tr;
   }
 
-  function renderShowMore(filtered) {
-    if (showMoreBtn) {
-      showMoreBtn.remove();
-      showMoreBtn = null;
-    }
-    var shown = Math.min(currentPage * PAGE_SIZE, filtered.length);
-    if (shown < filtered.length) {
-      showMoreBtn = document.createElement('button');
-      showMoreBtn.type = 'button';
-      showMoreBtn.className = 'btn btn-show-more';
-      showMoreBtn.textContent = 'Show more';
-      showMoreBtn.addEventListener('click', function () {
-        currentPage += 1;
-        renderRows(filtered);
-        renderShowMore(filtered);
-      });
-      itemsTable.parentNode.appendChild(showMoreBtn);
-    }
-  }
+  /* ---------- render ---------- */
 
   function render() {
-    var filtered = getFilteredItems();
-    currentPage = 1;
-    updateTotal();
+    renderHeader();
+    renderKpis();
+    renderTable();
+    renderPanel();
+    updateResponsive();
+    window.knowiReportReady = true;
+  }
 
-    if (filtered.length === 0) {
-      if (tableWrap) tableWrap.hidden = true;
-      emptyState.hidden = false;
+  function renderHeader() {
+    if (state.error && state.error.code === 401) {
+      el.dateRange.textContent = 'Your session has expired.';
+      el.previewPill.hidden = true;
+      el.navCount.textContent = '–';
+      return;
+    }
+    if (state.loading) {
+      el.dateRange.textContent = 'Loading payment dates…';
+      el.previewPill.hidden = true;
+      return;
+    }
+    if (state.rows.length === 0) {
+      el.dateRange.textContent = 'No payment data available.';
+      el.previewPill.hidden = false;
+      el.navCount.textContent = '0';
+      return;
+    }
+    el.previewPill.hidden = true;
+    el.navCount.textContent = fmtInt(state.rows.length);
+    var range = dateRange();
+    if (range) {
+      el.dateRange.textContent = 'Payments from ' + fmtDate(range.min) + ' to ' + fmtDate(range.max);
+    } else {
+      el.dateRange.textContent = 'Payment dates unavailable.';
+    }
+  }
+
+  function renderKpis() {
+    if (state.loading) {
+      el.kpiTotal.textContent = '–';
+      el.kpiSupporters.textContent = '–';
+      el.kpiRecurring.textContent = '–';
+      el.kpiAvg.textContent = '–';
+      return;
+    }
+    if (state.error) {
+      el.kpiTotal.textContent = '–';
+      el.kpiSupporters.textContent = '–';
+      el.kpiRecurring.textContent = '–';
+      el.kpiAvg.textContent = '–';
+      return;
+    }
+    var k = computeKpis();
+    el.kpiTotal.textContent = fmtMoney(k.totalRaised);
+    el.kpiSupporters.textContent = fmtInt(k.supporters);
+    el.kpiRecurring.textContent = fmtInt(k.recurring);
+    el.kpiAvg.textContent = fmtMoney(k.avgGift);
+  }
+
+  function renderTable() {
+    // 401 session expired
+    if (state.error && state.error.code === 401) {
+      el.tableMeta.textContent = '';
+      el.showingMeta.textContent = '';
+      el.tableScroll.hidden = true;
+      el.cardList.hidden = true;
+      el.tableBody.innerHTML = '';
+      el.cardList.innerHTML = '';
+      var msg = document.createElement('div');
+      msg.className = 'state-msg state-error';
+      msg.innerHTML = 'Your session has expired. <a href="login">Sign in again</a> to continue.';
+      el.tableScroll.parentNode.insertBefore(msg, el.tableScroll);
+      if (el._sessionMsg) el._sessionMsg.remove();
+      el._sessionMsg = msg;
+      return;
+    }
+    if (el._sessionMsg) { el._sessionMsg.remove(); el._sessionMsg = null; }
+
+    // loading
+    if (state.loading) {
+      el.tableMeta.textContent = 'Loading…';
+      el.showingMeta.textContent = '';
+      el.prevBtn.disabled = true;
+      el.nextBtn.disabled = true;
+      el.tableScroll.hidden = false;
+      el.cardList.hidden = true;
+      el.tableBody.innerHTML = skeletonRows(8);
       return;
     }
 
-    emptyState.hidden = true;
-    if (tableWrap) tableWrap.hidden = false;
-    renderRows(filtered);
-    renderShowMore(filtered);
+    // error
+    if (state.error) {
+      el.tableMeta.textContent = '';
+      el.showingMeta.textContent = '';
+      el.prevBtn.disabled = true;
+      el.nextBtn.disabled = true;
+      el.tableScroll.hidden = true;
+      el.cardList.hidden = true;
+      el.tableBody.innerHTML = '';
+      el.cardList.innerHTML = '';
+      var em = document.createElement('div');
+      em.className = 'state-msg state-error';
+      em.textContent = state.error.message || 'Something went wrong.';
+      el.tableScroll.parentNode.insertBefore(em, el.tableScroll);
+      if (el._errMsg) el._errMsg.remove();
+      el._errMsg = em;
+      return;
+    }
+    if (el._errMsg) { el._errMsg.remove(); el._errMsg = null; }
+
+    var rows = sortedRows(filteredRows());
+    var total = rows.length;
+    var totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (state.page > totalPages) state.page = totalPages;
+    if (state.page < 1) state.page = 1;
+    var start = (state.page - 1) * PAGE_SIZE;
+    var end = Math.min(start + PAGE_SIZE, total);
+    var pageRows = rows.slice(start, end);
+
+    el.tableMeta.textContent = total + ' payment' + (total === 1 ? '' : 's');
+
+    if (total === 0) {
+      el.showingMeta.textContent = 'No payments match your filters.';
+      el.prevBtn.disabled = true;
+      el.nextBtn.disabled = true;
+      el.tableScroll.hidden = true;
+      el.cardList.hidden = true;
+      el.tableBody.innerHTML = '';
+      el.cardList.innerHTML = '';
+      var em2 = document.createElement('div');
+      em2.className = 'state-msg state-empty';
+      em2.textContent = 'No payments match your filters. Try clearing the search or changing a filter.';
+      el.tableScroll.parentNode.insertBefore(em2, el.tableScroll);
+      if (el._emptyMsg) el._emptyMsg.remove();
+      el._emptyMsg = em2;
+      return;
+    }
+    if (el._emptyMsg) { el._emptyMsg.remove(); el._emptyMsg = null; }
+
+    el.showingMeta.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + total;
+    el.prevBtn.disabled = state.page <= 1;
+    el.nextBtn.disabled = state.page >= totalPages;
+
+    // render rows or cards
+    if (isMobile()) {
+      el.tableScroll.hidden = true;
+      el.cardList.hidden = false;
+      el.cardList.innerHTML = pageRows.map(function (r) { return cardHtml(r); }).join('');
+    } else {
+      el.tableScroll.hidden = false;
+      el.cardList.hidden = true;
+      el.tableBody.innerHTML = pageRows.map(function (r) { return rowHtml(r); }).join('');
+    }
+
+    updateSortIndicators();
   }
 
-  function loadItems() {
-    showLoading();
-    fetch('api/items')
-      .then(function (r) {
-        if (!r.ok) throw new Error('bad status');
-        return r.json();
-      })
-      .then(function (data) {
-        allItems = data.items || [];
-        buildFilterOptions();
-        render();
-        loadingState.hidden = true;
-        window.knowiReportReady = true;
-      })
-      .catch(function () {
-        showError();
-        window.knowiReportReady = true;
+  function rowHtml(r) {
+    var sid = str(r.supporter_id);
+    var selected = state.selectedSupporterId === sid ? ' is-selected' : '';
+    return '<tr class="pay-row' + selected + '" data-sid="' + escapeHtml(sid) + '" tabindex="0" role="button" aria-label="View ' + escapeHtml(supporterDisplay(r)) + '">' +
+      '<td class="col-date">' + fmtDate(r.payment_at) + '</td>' +
+      '<td class="col-supporter">' + escapeHtml(supporterDisplay(r)) + '</td>' +
+      '<td class="col-project">' + escapeHtml(str(r.project) || '—') + '</td>' +
+      '<td class="col-method">' + escapeHtml(str(r.payment_method) || '—') + '</td>' +
+      '<td class="col-amount num">' + fmtMoney(r.amount_paid) + '</td>' +
+      '<td class="col-fee num">' + fmtMoney(r.fee_amount) + '</td>' +
+      '<td class="col-status"><span class="pill pill-' + statusOf(r).toLowerCase() + '">' + statusOf(r) + '</span></td>' +
+      '</tr>';
+  }
+
+  function cardHtml(r) {
+    var sid = str(r.supporter_id);
+    var selected = state.selectedSupporterId === sid ? ' is-selected' : '';
+    return '<div class="pay-card' + selected + '" data-sid="' + escapeHtml(sid) + '" tabindex="0" role="button" aria-label="View ' + escapeHtml(supporterDisplay(r)) + '">' +
+      '<div class="card-top">' +
+        '<span class="card-name">' + escapeHtml(supporterDisplay(r)) + '</span>' +
+        '<span class="pill pill-' + statusOf(r).toLowerCase() + '">' + statusOf(r) + '</span>' +
+      '</div>' +
+      '<div class="card-mid">' +
+        '<span class="card-date">' + fmtDate(r.payment_at) + '</span>' +
+        '<span class="card-amount">' + fmtMoney(r.amount_paid) + '</span>' +
+      '</div>' +
+      '<div class="card-bot">' +
+        '<span class="card-project">' + escapeHtml(str(r.project) || '—') + '</span>' +
+        '<span class="card-method">' + escapeHtml(str(r.payment_method) || '—') + '</span>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function skeletonRows(n) {
+    var html = '';
+    for (var i = 0; i < n; i++) {
+      html += '<tr class="skeleton-row">' +
+        '<td><span class="skel"></span></td>' +
+        '<td><span class="skel skel-wide"></span></td>' +
+        '<td><span class="skel"></span></td>' +
+        '<td><span class="skel"></span></td>' +
+        '<td class="num"><span class="skel"></span></td>' +
+        '<td class="num"><span class="skel"></span></td>' +
+        '<td><span class="skel skel-pill"></span></td>' +
+        '</tr>';
+    }
+    return html;
+  }
+
+  function updateSortIndicators() {
+    var ths = el.tableScroll.querySelectorAll('th.sortable');
+    ths.forEach(function (th) {
+      var field = th.getAttribute('data-sort');
+      if (field === state.sortField) {
+        th.setAttribute('aria-sort', state.sortDir === 'asc' ? 'ascending' : 'descending');
+        var btn = th.querySelector('.sort-btn');
+        if (btn) {
+          btn.classList.add('is-active');
+          btn.setAttribute('aria-label', btn.textContent.trim() + (state.sortDir === 'asc' ? ' ascending' : ' descending'));
+        }
+      } else {
+        th.removeAttribute('aria-sort');
+        var btn2 = th.querySelector('.sort-btn');
+        if (btn2) {
+          btn2.classList.remove('is-active');
+          btn2.setAttribute('aria-label', btn2.textContent.trim());
+        }
+      }
+    });
+  }
+
+  /* ---------- side panel ---------- */
+
+  function renderPanel() {
+    if (state.selectedSupporterId == null) {
+      el.sidePanel.hidden = true;
+      el.scrim.hidden = true;
+      return;
+    }
+    var sid = state.selectedSupporterId;
+    var supporter = null;
+    var payments = [];
+    state.rows.forEach(function (r) {
+      if (str(r.supporter_id) === sid) {
+        if (!supporter) supporter = r;
+        payments.push(r);
+      }
+    });
+
+    if (!supporter) {
+      el.sidePanel.hidden = true;
+      el.scrim.hidden = true;
+      state.selectedSupporterId = null;
+      return;
+    }
+
+    // lifetime total
+    var lifetime = 0;
+    payments.forEach(function (p) {
+      if (toBool(p.payment_successful) && !toBool(p.refund)) lifetime += toNum(p.amount_paid);
+    });
+
+    // sort payments by date desc
+    payments.sort(function (a, b) {
+      var at = new Date(a.payment_at).getTime() || 0;
+      var bt = new Date(b.payment_at).getTime() || 0;
+      return bt - at;
+    });
+
+    var name = toBool(supporter.anonymous_donation) ? 'Anonymous' : (str(supporter.supporter_name) || 'Supporter');
+    el.panelName.textContent = name;
+
+    var html = '';
+    html += '<div class="panel-lifetime">';
+    html += '<span class="panel-lifetime-label">Lifetime total</span>';
+    html += '<span class="panel-lifetime-value">' + fmtMoney(lifetime) + '</span>';
+    html += '</div>';
+
+    html += '<dl class="panel-facts">';
+    html += factRow('Email', supporter.email);
+    html += factRow('Mobile', supporter.mobile_phone);
+    html += factRow('Type', supporter.supporter_type);
+    html += factRow('Acquired', supporter.acquisition_date ? fmtDate(supporter.acquisition_date) : '—');
+    html += factRow('Recurring', supporter.recurring_donor_status || (toBool(supporter.recurring_donor) ? 'Yes' : 'No'));
+    html += factRow('Membership', supporter.membership_status || '—');
+    html += '</dl>';
+
+    html += '<h3 class="panel-subhead">Payments (' + payments.length + ')</h3>';
+    if (payments.length === 0) {
+      html += '<p class="panel-empty">No payments on record.</p>';
+    } else {
+      html += '<ul class="panel-payments">';
+      payments.forEach(function (p) {
+        html += '<li class="panel-pay-row">' +
+          '<span class="panel-pay-date">' + fmtDate(p.payment_at) + '</span>' +
+          '<span class="panel-pay-project">' + escapeHtml(str(p.project) || '—') + '</span>' +
+          '<span class="panel-pay-amount">' + fmtMoney(p.amount_paid) + '</span>' +
+          '</li>';
       });
+      html += '</ul>';
+    }
+
+    el.panelBody.innerHTML = html;
+    el.sidePanel.hidden = false;
+    el.scrim.hidden = false;
+    el.panelClose.focus();
   }
 
-  searchInput.addEventListener('input', render);
-  filterSelect.addEventListener('change', render);
-  retryBtn.addEventListener('click', loadItems);
+  function factRow(label, value) {
+    var v = value == null || value === '' ? '—' : value;
+    return '<div class="fact"><dt class="fact-label">' + escapeHtml(label) + '</dt><dd class="fact-value">' + escapeHtml(v) + '</dd></div>';
+  }
 
-  loadItems();
+  function openPanel(sid) {
+    state.selectedSupporterId = sid;
+    lastFocused = document.activeElement;
+    renderPanel();
+  }
+
+  function closePanel() {
+    state.selectedSupporterId = null;
+    el.sidePanel.hidden = true;
+    el.scrim.hidden = true;
+    renderPanel();
+    if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+  }
+
+  /* ---------- responsive ---------- */
+
+  function updateResponsive() {
+    if (state.loading || state.error) return;
+    var total = filteredRows().length;
+    if (total === 0) return;
+    if (isMobile()) {
+      el.tableScroll.hidden = true;
+      el.cardList.hidden = false;
+    } else {
+      el.tableScroll.hidden = false;
+      el.cardList.hidden = true;
+    }
+  }
+
+  /* ---------- events ---------- */
+
+  function bindEvents() {
+    el.searchInput.addEventListener('input', function () {
+      state.search = el.searchInput.value;
+      state.page = 1;
+      renderTable();
+    });
+
+    el.financialYearSelect.addEventListener('change', function () {
+      state.financialYear = el.financialYearSelect.value;
+      state.page = 1;
+      renderTable();
+    });
+
+    el.paymentMethodSelect.addEventListener('change', function () {
+      state.paymentMethod = el.paymentMethodSelect.value;
+      state.page = 1;
+      renderTable();
+    });
+
+    el.successfulOnly.addEventListener('change', function () {
+      state.successfulOnly = el.successfulOnly.checked;
+      state.page = 1;
+      renderTable();
+    });
+
+    el.prevBtn.addEventListener('click', function () {
+      if (state.page > 1) { state.page--; renderTable(); }
+    });
+
+    el.nextBtn.addEventListener('click', function () {
+      state.page++;
+      renderTable();
+    });
+
+    // sort
+    var ths = el.tableScroll.querySelectorAll('th.sortable');
+    ths.forEach(function (th) {
+      var field = th.getAttribute('data-sort');
+      var btn = th.querySelector('.sort-btn');
+      if (btn) {
+        btn.addEventListener('click', function () {
+          if (state.sortField === field) {
+            state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            state.sortField = field;
+            state.sortDir = 'desc';
+          }
+          state.page = 1;
+          renderTable();
+        });
+      }
+    });
+
+    // row / card click (delegated)
+    el.tableBody.addEventListener('click', function (e) {
+      var tr = e.target.closest('tr[data-sid]');
+      if (tr) openPanel(tr.getAttribute('data-sid'));
+    });
+    el.tableBody.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        var tr = e.target.closest('tr[data-sid]');
+        if (tr) { e.preventDefault(); openPanel(tr.getAttribute('data-sid')); }
+      }
+    });
+    el.cardList.addEventListener('click', function (e) {
+      var card = e.target.closest('[data-sid]');
+      if (card) openPanel(card.getAttribute('data-sid'));
+    });
+    el.cardList.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        var card = e.target.closest('[data-sid]');
+        if (card) { e.preventDefault(); openPanel(card.getAttribute('data-sid')); }
+      }
+    });
+
+    // panel close
+    el.panelClose.addEventListener('click', closePanel);
+    el.scrim.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !el.sidePanel.hidden) closePanel();
+    });
+
+    // resize
+    var resizeTimer;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        updateResponsive();
+      }, 120);
+    });
+  }
+
+  /* ---------- init ---------- */
+
+  function init() {
+    moneyFmt = new Intl.NumberFormat('en-AU', { style: 'currency', currency: CURRENCY, minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    intFmt = new Intl.NumberFormat('en-AU', { maximumFractionDigits: 0 });
+    cacheEls();
+    bindEvents();
+    loadData();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
