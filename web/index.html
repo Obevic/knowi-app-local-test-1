@@ -1,13 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Supporter Hub</title>
-<link rel="stylesheet" href="app.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventory Desk</title>
+  <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<div id="app"></div>
-<script src="app.js"></script>
+  <header class="app-header">
+    <div class="brand">
+      <svg class="brand-logo" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true" focusable="false">
+        <g stroke-width="2.4" stroke-linecap="round">
+          <line x1="12" y1="3" x2="12" y2="21" stroke="#e0533d"></line>
+          <line x1="3" y1="12" x2="21" y2="12" stroke="#3f7fd6"></line>
+          <line x1="5.6" y1="5.6" x2="18.4" y2="18.4" stroke="#e0a53d"></line>
+          <line x1="18.4" y1="5.6" x2="5.6" y2="18.4" stroke="#4fae7e"></line>
+        </g>
+        <circle cx="12" cy="12" r="2.4" fill="#1f2d3d"></circle>
+      </svg>
+      <span class="brand-word">knowi</span>
+    </div>
+    <span class="badge">Synthetic data</span>
+  </header>
+
+  <main class="page">
+    <h1 class="page-title">Inventory Desk</h1>
+
+    <div class="controls">
+      <div class="control">
+        <label class="control-label" for="search-input">Search item</label>
+        <input type="text" id="search-input" class="text-input" placeholder="Search by item name" autocomplete="off">
+      </div>
+      <div class="control">
+        <label class="control-label" for="filter-select">Filter</label>
+        <select id="filter-select" class="select-input">
+          <option value="All">All</option>
+        </select>
+      </div>
+    </div>
+
+    <section class="total-card" aria-label="Total stock value">
+      <span class="total-label">Total stock value</span>
+      <span class="total-figure" id="total-value">$0</span>
+    </section>
+
+    <section class="table-card">
+      <div class="table-wrap">
+        <table class="items-table" id="items-table">
+          <thead>
+            <tr>
+              <th scope="col">Item</th>
+              <th scope="col">Supplier</th>
+              <th scope="col">Quantity</th>
+              <th scope="col">Reorder point</th>
+              <th scope="col">Unit cost</th>
+              <th scope="col">Restock</th>
+            </tr>
+          </thead>
+          <tbody id="items-body"></tbody>
+        </table>
+      </div>
+
+      <div class="state" id="loading-state" role="status">
+        <span class="spinner" aria-hidden="true"></span>
+        <span>Loading inventory&hellip;</span>
+      </div>
+
+      <div class="state" id="empty-state" role="status" hidden>
+        <p class="state-title">No items match your search</p>
+        <p class="state-body">Try a different name or clear the filter to see the full list.</p>
+      </div>
+
+      <div class="state state-error" id="error-state" role="alert" hidden>
+        <p class="state-title">Couldn&rsquo;t load inventory</p>
+        <p class="state-body">Something went wrong while fetching items. Please try again.</p>
+        <button type="button" class="btn btn-primary" id="retry-btn">Retry</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
 </body>
 </html>
