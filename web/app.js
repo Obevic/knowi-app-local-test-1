@@ -3,51 +3,132 @@ window.knowiReportReady = false;
 (function () {
   'use strict';
 
-  // ---------------------------------------------------------------------------
-  // Element references
-  // ---------------------------------------------------------------------------
-  var app = document.getElementById('app');
-  var navCount = document.getElementById('nav-count');
-  var viewerName = document.getElementById('viewer-name');
-  var addBtn = document.getElementById('add-btn');
-  var filterBar = document.getElementById('filter-bar');
-  var taskRows = document.getElementById('task-rows');
-  var emptyState = document.getElementById('empty-state');
-  var errorBanner = document.getElementById('error-banner');
-  var sessionExpired = document.getElementById('session-expired');
-  var loginLink = document.getElementById('login-link');
+  var PAGE_SIZE = 25;
+  var MOBILE_BREAK = 700;
 
-  var taskModal = document.getElementById('task-modal');
-  var taskForm = document.getElementById('task-form');
-  var taskTitle = document.getElementById('task-title');
-  var taskOwner = document.getElementById('task-owner');
-  var taskStatus = document.getElementById('task-status');
-  var taskSave = document.getElementById('task-save');
-  var taskCancel = document.getElementById('task-cancel');
-  var taskEditId = document.getElementById('task-edit-id');
-  var taskModalTitle = document.getElementById('task-modal-title');
+  var state = {
+    columns: [],
+    rows: [],
+    records: [],
+    idx: {},
+    sortKey: 'payment_at',
+    sortDir: 'desc',
+    page: 1,
+    filters: { search: '', year: '__all__', method: '__all__', successOnly: true },
+    panelSupporterId: null,
+    lastFocused: null
+  };
 
-  var deleteModal = document.getElementById('delete-modal');
-  var deleteConfirm = document.getElementById('delete-confirm');
-  var deleteCancel = document.getElementById('delete-cancel');
-  var deleteId = document.getElementById('delete-id');
+  var el = {};
 
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
-  var allTasks = [];
-  var activeFilter = 'all';
-  var PAGE_SIZE = 50;
-  var visibleCount = PAGE_SIZE;
-  var lastFocused = null;
+  function $(id) { return document.getElementById(id); }
 
-  var STATUS_ORDER = ['To do', 'In progress', 'Done'];
+  function cacheEls() {
+    el.dateRange = $('dateRange');
+    el.syntheticPill = $('syntheticPill');
+    el.navCount = $('navCount');
+    el.kpiTotal = $('kpiTotal');
+    el.kpiSupporters = $('kpiSupporters');
+    el.kpiRecurring = $('kpiRecurring');
+    el.kpiAvg = $('kpiAvg');
+    el.searchInput = $('searchInput');
+    el.yearSelect = $('yearSelect');
+    el.methodSelect = $('methodSelect');
+    el.successOnly = $('successOnly');
+    el.tableScroll = $('tableScroll');
+    el.tableBody = $('tableBody');
+    el.cardList = $('cardList');
+    el.tableState = $('tableState');
+    el.stateInner = $('stateInner');
+    el.footInfo = $('footInfo');
+    el.prevBtn = $('prevBtn');
+    el.nextBtn = $('nextBtn');
+    el.panelBackdrop = $('panelBackdrop');
+    el.sidePanel = $('sidePanel');
+    el.panelName = $('panelName');
+    el.panelClose = $('panelClose');
+    el.panelBody = $('panelBody');
+  }
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
-  function escapeHtml(value) {
-    return String(value)
+  // ---- helpers -------------------------------------------------------------
+
+  function toNum(v) {
+    if (v === null || v === undefined || v === '') return 0;
+    var n = Number(v);
+    return isFinite(n) ? n : 0;
+  }
+
+  function toBool(v) {
+    if (v === true || v === false) return v;
+    if (typeof v === 'string') {
+      var s = v.trim().toLowerCase();
+      return s === 'true' || s === '1' || s === 'yes' || s === 'y';
+    }
+    return !!v;
+  }
+
+  function str(v) {
+    if (v === null || v === undefined) return '';
+    return String(v);
+  }
+
+  function fmtMoney(n) {
+    return new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(n);
+  }
+
+  function fmtInt(n) {
+    return new Intl.NumberFormat('en-US').format(n);
+  }
+
+  function parseDate(v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+    var s = String(v).trim();
+    if (!s) return null;
+    var d = new Date(s);
+    if (!isNaN(d.getTime())) return d;
+    var m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+    if (m) {
+      var day = parseInt(m[1], 10);
+      var mon = parseInt(m[2], 10);
+      var yr = parseInt(m[3], 10);
+      if (yr < 100) yr += 2000;
+      var d2 = new Date(yr, mon - 1, day);
+      if (!isNaN(d2.getTime())) return d2;
+    }
+    return null;
+  }
+
+  function fmtDate(v) {
+    var d = parseDate(v);
+    if (!d) return '—';
+    var dd = String(d.getDate()).padStart(2, '0');
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var yy = d.getFullYear();
+    return dd + '/' + mm + '/' + yy;
+  }
+
+  function statusOf(r) {
+    if (toBool(r.refund)) return 'Refunded';
+    if (toBool(r.payment_successful)) return 'Paid';
+    return 'Failed';
+  }
+
+  function statusClass(s) {
+    if (s === 'Paid') return 'pill-paid';
+    if (s === 'Refunded') return 'pill-refunded';
+    return 'pill-failed';
+  }
+
+  function supporterDisplay(r) {
+    return toBool(r.anonymous_donation) ? 'Anonymous' : (str(r.supporter_name) || 'Anonymous');
+  }
+
+  function esc(s) {
+    return String(s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -55,407 +136,506 @@ window.knowiReportReady = false;
       .replace(/'/g, '&#39;');
   }
 
-  function formatDate(value) {
-    if (!value) return '—';
-    var d = new Date(value);
-    if (isNaN(d.getTime())) return '—';
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var day = d.getDate();
-    var month = months[d.getMonth()];
-    var year = d.getFullYear();
-    var h = d.getHours();
-    var m = d.getMinutes();
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    var h12 = h % 12;
-    if (h12 === 0) h12 = 12;
-    var mm = m < 10 ? '0' + m : '' + m;
-    return month + ' ' + day + ', ' + year + ' · ' + h12 + ':' + mm + ' ' + ampm;
+  function escAttr(s) {
+    return esc(s);
   }
 
-  function statusClass(status) {
-    if (status === 'Done') return 'status-done';
-    if (status === 'In progress') return 'status-progress';
-    return 'status-todo';
+  function isMobile() {
+    return window.innerWidth < MOBILE_BREAK;
   }
 
-  function counts() {
-    var c = { all: allTasks.length, 'To do': 0, 'In progress': 0, 'Done': 0 };
-    for (var i = 0; i < allTasks.length; i++) {
-      var s = allTasks[i].status;
-      if (c[s] !== undefined) c[s] += 1;
-    }
-    return c;
-  }
+  // ---- data loading --------------------------------------------------------
 
-  function filteredTasks() {
-    if (activeFilter === 'all') return allTasks.slice();
-    return allTasks.filter(function (t) { return t.status === activeFilter; });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Rendering
-  // ---------------------------------------------------------------------------
-  function renderSkeleton() {
-    var html = '';
-    for (var i = 0; i < 6; i++) {
-      html +=
-        '<tr class="skeleton-row">' +
-        '<td class="col-task"><span class="sk sk-title"></span></td>' +
-        '<td class="col-owner"><span class="sk sk-owner"></span></td>' +
-        '<td class="col-status"><span class="sk sk-pill"></span></td>' +
-        '<td class="col-created"><span class="sk sk-date"></span></td>' +
-        '<td class="col-actions"></td>' +
-        '</tr>';
-    }
-    taskRows.innerHTML = html;
-    emptyState.hidden = true;
-  }
-
-  function renderTable() {
-    var list = filteredTasks();
-    var total = list.length;
-    var shown = Math.min(visibleCount, total);
-
-    if (total === 0) {
-      taskRows.innerHTML = '';
-      emptyState.hidden = false;
-      return;
-    }
-
-    var html = '';
-    for (var i = 0; i < shown; i++) {
-      var t = list[i];
-      var id = t.id;
-      html +=
-        '<tr data-id="' + id + '">' +
-        '<td class="col-task"><span class="task-name">' + escapeHtml(t.title) + '</span></td>' +
-        '<td class="col-owner">' + escapeHtml(t.owner) + '</td>' +
-        '<td class="col-status"><span class="status-pill ' + statusClass(t.status) + '">' + escapeHtml(t.status) + '</span></td>' +
-        '<td class="col-created">' + formatDate(t.created_at) + '</td>' +
-        '<td class="col-actions">' +
-        '<button class="row-btn edit-btn" data-id="' + id + '" type="button" aria-label="Edit task ' + escapeHtml(t.title) + '">' +
-        '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.8-2.8L5.2 17.2 4 20z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"></path></svg>' +
-        '</button>' +
-        '<button class="row-btn delete-btn" data-id="' + id + '" type="button" aria-label="Delete task ' + escapeHtml(t.title) + '">' +
-        '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 7h14M9 7V5h6v2M7 7l1 13h8l1-13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>' +
-        '</button>' +
-        '</td>' +
-        '</tr>';
-    }
-
-    if (total > shown) {
-      html +=
-        '<tr class="more-row"><td colspan="5">' +
-        '<button class="show-more" type="button">Show more (' + (total - shown) + ' remaining)</button>' +
-        '</td></tr>';
-    }
-
-    taskRows.innerHTML = html;
-    emptyState.hidden = true;
-  }
-
-  function updateCounts() {
-    var c = counts();
-    if (navCount) navCount.textContent = c.all;
-    var btns = filterBar.querySelectorAll('.filter-btn');
-    for (var i = 0; i < btns.length; i++) {
-      var st = btns[i].getAttribute('data-status');
-      var pill = btns[i].querySelector('.filter-count');
-      if (pill) pill.textContent = c[st] !== undefined ? c[st] : 0;
-    }
-  }
-
-  function updateFilterActive() {
-    var btns = filterBar.querySelectorAll('.filter-btn');
-    for (var i = 0; i < btns.length; i++) {
-      var st = btns[i].getAttribute('data-status');
-      if (st === activeFilter) {
-        btns[i].classList.add('active');
-        btns[i].setAttribute('aria-pressed', 'true');
-      } else {
-        btns[i].classList.remove('active');
-        btns[i].setAttribute('aria-pressed', 'false');
+  function buildRecords(columns, rows) {
+    var idx = {};
+    columns.forEach(function (c, i) { idx[c] = i; });
+    var records = rows.map(function (row) {
+      var r = {};
+      for (var i = 0; i < columns.length; i++) {
+        r[columns[i]] = row[i];
       }
+      r._date = parseDate(r.payment_at);
+      r._amount = toNum(r.amount_paid);
+      r._fee = toNum(r.fee_amount);
+      r._status = statusOf(r);
+      return r;
+    });
+    return { idx: idx, records: records };
+  }
+
+  function computeKpis(records) {
+    var total = 0;
+    var successfulCount = 0;
+    var supporters = new Set();
+    var recurring = new Set();
+    var minD = null;
+    var maxD = null;
+
+    records.forEach(function (r) {
+      if (r._date) {
+        if (!minD || r._date < minD) minD = r._date;
+        if (!maxD || r._date > maxD) maxD = r._date;
+      }
+      var sid = r.supporter_id;
+      if (sid !== null && sid !== undefined && str(sid) !== '') supporters.add(sid);
+      if (toBool(r.recurring_donor)) recurring.add(sid);
+      if (toBool(r.payment_successful) && !toBool(r.refund)) {
+        total += r._amount;
+        successfulCount += 1;
+      }
+    });
+
+    return {
+      total: total,
+      supporters: supporters.size,
+      recurring: recurring.size,
+      avg: successfulCount > 0 ? total / successfulCount : 0,
+      minDate: minD,
+      maxDate: maxD
+    };
+  }
+
+  function distinctValues(records, key) {
+    var set = new Set();
+    records.forEach(function (r) {
+      var v = r[key];
+      if (v !== null && v !== undefined && str(v) !== '') set.add(str(v));
+    });
+    return Array.from(set);
+  }
+
+  function populateSelect(select, values, allLabel) {
+    // keep the first (All) option, rebuild the rest
+    while (select.options.length > 1) select.remove(1);
+    values.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v;
+      select.appendChild(opt);
+    });
+  }
+
+  // ---- filtering / sorting -------------------------------------------------
+
+  function applyFilters(records) {
+    var f = state.filters;
+    var q = f.search.trim().toLowerCase();
+    return records.filter(function (r) {
+      if (f.successOnly && !(toBool(r.payment_successful) && !toBool(r.refund))) return false;
+      if (f.year !== '__all__' && str(r.financial_year) !== f.year) return false;
+      if (f.method !== '__all__' && str(r.payment_method) !== f.method) return false;
+      if (q) {
+        var hay = (str(r.supporter_name) + ' ' + str(r.email) + ' ' + str(r.receipt_number)).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function compareValues(a, b, key) {
+    if (key === 'status') {
+      var sa = a._status, sb = b._status;
+      if (sa === sb) return 0;
+      return sa < sb ? -1 : 1;
     }
+    if (key === 'amount_paid') {
+      var na = a._amount, nb = b._amount;
+      return na === nb ? 0 : (na < nb ? -1 : 1);
+    }
+    if (key === 'fee_amount') {
+      var fa = a._fee, fb = b._fee;
+      return fa === fb ? 0 : (fa < fb ? -1 : 1);
+    }
+    if (key === 'payment_at') {
+      var da = a._date, db = b._date;
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.getTime() === db.getTime() ? 0 : (da.getTime() < db.getTime() ? -1 : 1);
+    }
+    var va = str(a[key]), vb = str(b[key]);
+    if (va === vb) return 0;
+    return va < vb ? -1 : 1;
+  }
+
+  function sortRecords(records) {
+    var key = state.sortKey;
+    var dir = state.sortDir === 'asc' ? 1 : -1;
+    return records.slice().sort(function (a, b) {
+      var c = compareValues(a, b, key);
+      if (c !== 0) return c * dir;
+      // stable tiebreak by date desc then amount
+      var da = a._date, db = b._date;
+      if (da && db && da.getTime() !== db.getTime()) return (da.getTime() < db.getTime() ? 1 : -1);
+      return b._amount - a._amount;
+    });
+  }
+
+  // ---- rendering -----------------------------------------------------------
+
+  function renderHeader(kpi) {
+    if (kpi.minDate && kpi.maxDate) {
+      el.dateRange.textContent = fmtDate(kpi.minDate) + ' – ' + fmtDate(kpi.maxDate);
+    } else {
+      el.dateRange.textContent = 'No payment dates available';
+    }
+    el.syntheticPill.hidden = state.records.length > 0;
+    el.navCount.textContent = fmtInt(state.records.length);
+  }
+
+  function renderKpis(kpi) {
+    el.kpiTotal.textContent = fmtMoney(kpi.total);
+    el.kpiSupporters.textContent = fmtInt(kpi.supporters);
+    el.kpiRecurring.textContent = fmtInt(kpi.recurring);
+    el.kpiAvg.textContent = fmtMoney(kpi.avg);
+  }
+
+  function updateSortIndicators() {
+    var ths = el.tableScroll.querySelectorAll('th.sortable');
+    ths.forEach(function (th) {
+      var key = th.getAttribute('data-key');
+      var btn = th.querySelector('.sort-btn');
+      var ind = th.querySelector('.sort-ind');
+      if (key === state.sortKey) {
+        th.setAttribute('aria-sort', state.sortDir === 'asc' ? 'ascending' : 'descending');
+        if (ind) ind.textContent = state.sortDir === 'asc' ? '▲' : '▼';
+      } else {
+        th.removeAttribute('aria-sort');
+        if (ind) ind.textContent = '';
+      }
+    });
+  }
+
+  function renderTable(filtered) {
+    var sorted = sortRecords(filtered);
+    var total = sorted.length;
+    var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    if (state.page > pages) state.page = pages;
+    if (state.page < 1) state.page = 1;
+    var start = (state.page - 1) * PAGE_SIZE;
+    var end = Math.min(start + PAGE_SIZE, total);
+    var slice = sorted.slice(start, end);
+
+    if (isMobile()) {
+      el.tableScroll.hidden = true;
+      el.cardList.hidden = false;
+      el.cardList.innerHTML = slice.map(function (r) {
+        return '' +
+          '<div class="pay-card" data-sid="' + escAttr(str(r.supporter_id)) + '" tabindex="0" role="button" aria-label="View ' + esc(supporterDisplay(r)) + '">' +
+            '<div class="pay-card-top">' +
+              '<span class="pay-card-name">' + esc(supporterDisplay(r)) + '</span>' +
+              '<span class="pill ' + statusClass(r._status) + '">' + esc(r._status) + '</span>' +
+            '</div>' +
+            '<div class="pay-card-meta">' +
+              '<span class="pay-card-date">' + esc(fmtDate(r.payment_at)) + '</span>' +
+              '<span class="pay-card-project">' + esc(str(r.project) || '—') + '</span>' +
+            '</div>' +
+            '<div class="pay-card-bottom">' +
+              '<span class="pay-card-method">' + esc(str(r.payment_method) || '—') + '</span>' +
+              '<span class="pay-card-amount">' + esc(fmtMoney(r._amount)) + '</span>' +
+            '</div>' +
+          '</div>';
+      }).join('');
+    } else {
+      el.cardList.hidden = true;
+      el.tableScroll.hidden = false;
+      el.tableBody.innerHTML = slice.map(function (r) {
+        return '' +
+          '<tr class="pay-row" data-sid="' + escAttr(str(r.supporter_id)) + '" tabindex="0" role="button" aria-label="View ' + esc(supporterDisplay(r)) + '">' +
+            '<td class="col-date">' + esc(fmtDate(r.payment_at)) + '</td>' +
+            '<td class="col-supporter">' + esc(supporterDisplay(r)) + '</td>' +
+            '<td class="col-project">' + esc(str(r.project) || '—') + '</td>' +
+            '<td class="col-method">' + esc(str(r.payment_method) || '—') + '</td>' +
+            '<td class="col-amount num">' + esc(fmtMoney(r._amount)) + '</td>' +
+            '<td class="col-fee num">' + esc(fmtMoney(r._fee)) + '</td>' +
+            '<td class="col-status"><span class="pill ' + statusClass(r._status) + '">' + esc(r._status) + '</span></td>' +
+          '</tr>';
+      }).join('');
+    }
+
+    el.footInfo.textContent = total === 0
+      ? 'Showing 0–0 of 0'
+      : 'Showing ' + (start + 1) + '–' + end + ' of ' + total;
+    el.prevBtn.disabled = state.page <= 1;
+    el.nextBtn.disabled = state.page >= pages;
+    updateSortIndicators();
+  }
+
+  function showState(kind, message) {
+    el.tableScroll.hidden = true;
+    el.cardList.hidden = true;
+    el.tableState.hidden = false;
+    el.stateInner.className = 'state-inner ' + kind;
+    if (kind === 'loading') {
+      el.stateInner.innerHTML =
+        '<div class="skeleton" aria-hidden="true">' +
+          '<div class="sk-line sk-w60"></div>' +
+          '<div class="sk-line sk-w90"></div>' +
+          '<div class="sk-line sk-w80"></div>' +
+          '<div class="sk-line sk-w70"></div>' +
+          '<div class="sk-line sk-w85"></div>' +
+        '</div>' +
+        '<span class="state-text">Loading payments…</span>';
+    } else if (kind === 'error') {
+      el.stateInner.innerHTML =
+        '<span class="state-icon" aria-hidden="true">!</span>' +
+        '<span class="state-text">' + esc(message || 'Something went wrong loading payments.') + '</span>' +
+        '<button type="button" class="btn btn-primary" data-retry>Try again</button>';
+      var btn = el.stateInner.querySelector('[data-retry]');
+      if (btn) btn.addEventListener('click', loadData);
+    } else {
+      el.stateInner.innerHTML =
+        '<span class="state-icon" aria-hidden="true">∅</span>' +
+        '<span class="state-text">' + esc(message || 'No payments match your filters.') + '</span>';
+    }
+  }
+
+  function hideState() {
+    el.tableState.hidden = true;
   }
 
   function render() {
-    updateCounts();
-    updateFilterActive();
-    renderTable();
-    window.knowiReportReady = true;
-  }
-
-  // ---------------------------------------------------------------------------
-  // Data loading
-  // ---------------------------------------------------------------------------
-  function showError(msg) {
-    errorBanner.textContent = msg;
-    errorBanner.hidden = false;
-  }
-
-  function hideError() {
-    errorBanner.hidden = true;
-    errorBanner.textContent = '';
-  }
-
-  function showSessionExpired() {
-    if (app) app.classList.add('session-expired-active');
-    if (sessionExpired) sessionExpired.hidden = false;
-    if (loginLink) loginLink.href = 'login';
-    hideError();
-  }
-
-  function hideSessionExpired() {
-    if (app) app.classList.remove('session-expired-active');
-    if (sessionExpired) sessionExpired.hidden = true;
-  }
-
-  function loadTasks() {
-    hideError();
-    hideSessionExpired();
-    renderSkeleton();
-    window.knowiReportReady = false;
-
-    fetch('api/tasks', { headers: { Accept: 'application/json' } })
-      .then(function (res) {
-        if (res.status === 401) {
-          showSessionExpired();
-          return null;
-        }
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (j) {
-            throw new Error(j.error || 'Failed to load tasks');
-          });
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        if (data === null) return;
-        allTasks = data.tasks || [];
-        visibleCount = PAGE_SIZE;
-        render();
-      })
-      .catch(function (err) {
-        taskRows.innerHTML = '';
-        emptyState.hidden = true;
-        showError(err.message || 'Something went wrong. Please try again.');
-      });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Modal helpers
-  // ---------------------------------------------------------------------------
-  function openModal(backdrop, focusEl) {
-    lastFocused = document.activeElement;
-    backdrop.hidden = false;
-    if (focusEl) {
-      setTimeout(function () { focusEl.focus(); }, 0);
-    }
-  }
-
-  function closeModal(backdrop) {
-    backdrop.hidden = true;
-    if (lastFocused && lastFocused.focus) lastFocused.focus();
-  }
-
-  function openAddModal() {
-    taskForm.reset();
-    taskEditId.value = '';
-    taskModalTitle.textContent = 'Add task';
-    taskSave.textContent = 'Save task';
-    openModal(taskModal, taskTitle);
-  }
-
-  function openEditModal(id) {
-    var task = null;
-    for (var i = 0; i < allTasks.length; i++) {
-      if (allTasks[i].id === id) { task = allTasks[i]; break; }
-    }
-    if (!task) return;
-    taskTitle.value = task.title;
-    taskOwner.value = task.owner;
-    taskStatus.value = task.status;
-    taskEditId.value = String(id);
-    taskModalTitle.textContent = 'Edit task';
-    taskSave.textContent = 'Save changes';
-    openModal(taskModal, taskTitle);
-  }
-
-  function openDeleteModal(id) {
-    deleteId.value = String(id);
-    openModal(deleteModal, deleteConfirm);
-  }
-
-  // ---------------------------------------------------------------------------
-  // Mutations
-  // ---------------------------------------------------------------------------
-  function saveTask() {
-    var title = taskTitle.value.trim();
-    var owner = taskOwner.value.trim();
-    var status = taskStatus.value;
-    if (!title || !owner) return;
-
-    taskSave.disabled = true;
-    var id = taskEditId.value;
-
-    var req;
-    if (id) {
-      req = fetch('api/tasks/' + id, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title, owner: owner, status: status })
-      });
-    } else {
-      req = fetch('api/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title, owner: owner, status: status })
-      });
-    }
-
-    req
-      .then(function (res) {
-        if (res.status === 401) {
-          closeModal(taskModal);
-          showSessionExpired();
-          return null;
-        }
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (j) {
-            throw new Error(j.error || 'Failed to save task');
-          });
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        if (data === null) return;
-        var task = data.task;
-        if (id) {
-          for (var i = 0; i < allTasks.length; i++) {
-            if (allTasks[i].id === task.id) {
-              allTasks[i] = task;
-              break;
-            }
-          }
-        } else {
-          allTasks.unshift(task);
-        }
-        closeModal(taskModal);
-        render();
-      })
-      .catch(function (err) {
-        showError(err.message || 'Failed to save task');
-      })
-      .then(function () {
-        taskSave.disabled = false;
-      });
-  }
-
-  function deleteTask() {
-    var id = Number(deleteId.value);
-    if (!id) return;
-
-    deleteConfirm.disabled = true;
-
-    fetch('api/tasks/' + id, { method: 'DELETE' })
-      .then(function (res) {
-        if (res.status === 401) {
-          closeModal(deleteModal);
-          showSessionExpired();
-          return null;
-        }
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (j) {
-            throw new Error(j.error || 'Failed to delete task');
-          });
-        }
-        return res.json();
-      })
-      .then(function (data) {
-        if (data === null) return;
-        allTasks = allTasks.filter(function (t) { return t.id !== id; });
-        closeModal(deleteModal);
-        render();
-      })
-      .catch(function (err) {
-        showError(err.message || 'Failed to delete task');
-      })
-      .then(function () {
-        deleteConfirm.disabled = false;
-      });
-  }
-
-  // ---------------------------------------------------------------------------
-  // Events
-  // ---------------------------------------------------------------------------
-  addBtn.addEventListener('click', openAddModal);
-
-  taskCancel.addEventListener('click', function () {
-    closeModal(taskModal);
-  });
-
-  taskForm.addEventListener('submit', function (e) {
-    e.preventDefault();
-    saveTask();
-  });
-
-  deleteCancel.addEventListener('click', function () {
-    closeModal(deleteModal);
-  });
-
-  deleteConfirm.addEventListener('click', deleteTask);
-
-  filterBar.addEventListener('click', function (e) {
-    var btn = e.target.closest('.filter-btn');
-    if (!btn) return;
-    activeFilter = btn.getAttribute('data-status');
-    visibleCount = PAGE_SIZE;
-    render();
-  });
-
-  taskRows.addEventListener('click', function (e) {
-    var editBtn = e.target.closest('.edit-btn');
-    if (editBtn) {
-      openEditModal(Number(editBtn.getAttribute('data-id')));
+    var filtered = applyFilters(state.records);
+    if (state.records.length === 0) {
+      showState('empty', 'No payment data available.');
+      el.footInfo.textContent = 'Showing 0–0 of 0';
+      el.prevBtn.disabled = true;
+      el.nextBtn.disabled = true;
       return;
     }
-    var delBtn = e.target.closest('.delete-btn');
-    if (delBtn) {
-      openDeleteModal(Number(delBtn.getAttribute('data-id')));
+    if (filtered.length === 0) {
+      showState('empty', 'No payments match your filters.');
+      el.footInfo.textContent = 'Showing 0–0 of 0';
+      el.prevBtn.disabled = true;
+      el.nextBtn.disabled = true;
       return;
     }
-    var moreBtn = e.target.closest('.show-more');
-    if (moreBtn) {
-      visibleCount += PAGE_SIZE;
-      renderTable();
-    }
-  });
+    hideState();
+    renderTable(filtered);
+  }
 
-  // Close modals on backdrop click
-  [taskModal, deleteModal].forEach(function (backdrop) {
-    backdrop.addEventListener('click', function (e) {
-      if (e.target === backdrop) closeModal(backdrop);
+  // ---- side panel ----------------------------------------------------------
+
+  function openPanel(sid) {
+    var recs = state.records.filter(function (r) { return str(r.supporter_id) === str(sid); });
+    if (recs.length === 0) return;
+    var first = recs[0];
+    var name = toBool(first.anonymous_donation) ? 'Anonymous' : (str(first.supporter_name) || 'Anonymous');
+
+    var lifetime = 0;
+    recs.forEach(function (r) {
+      if (toBool(r.payment_successful) && !toBool(r.refund)) lifetime += r._amount;
     });
-  });
 
-  // Escape key closes modals
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      if (!taskModal.hidden) closeModal(taskModal);
-      if (!deleteModal.hidden) closeModal(deleteModal);
+    var payments = recs.slice().sort(function (a, b) {
+      var da = a._date, db = b._date;
+      if (da && db && da.getTime() !== db.getTime()) return da.getTime() < db.getTime() ? 1 : -1;
+      return b._amount - a._amount;
+    });
+
+    var rowsHtml = payments.map(function (r) {
+      return '' +
+        '<tr>' +
+          '<td class="pp-date">' + esc(fmtDate(r.payment_at)) + '</td>' +
+          '<td class="pp-project">' + esc(str(r.project) || '—') + '</td>' +
+          '<td class="pp-amount num">' + esc(fmtMoney(r._amount)) + '</td>' +
+        '</tr>';
+    }).join('');
+
+    function field(label, value) {
+      var v = (value === null || value === undefined || str(value) === '') ? '—' : str(value);
+      return '<div class="pf"><dt>' + esc(label) + '</dt><dd>' + esc(v) + '</dd></div>';
     }
-  });
 
-  // ---------------------------------------------------------------------------
-  // Viewer identity (best-effort from trusted header via a lightweight probe)
-  // ---------------------------------------------------------------------------
-  function setViewer(name) {
-    if (viewerName && name) viewerName.textContent = name;
+    var recurring = toBool(first.recurring_donor) ? 'Yes' : 'No';
+
+    el.panelBody.innerHTML =
+      '<div class="panel-lifetime">' +
+        '<span class="pl-label">Lifetime total</span>' +
+        '<span class="pl-value">' + esc(fmtMoney(lifetime)) + '</span>' +
+        '<span class="pl-count">' + fmtInt(payments.length) + ' payment' + (payments.length === 1 ? '' : 's') + '</span>' +
+      '</div>' +
+      '<dl class="panel-fields">' +
+        field('Email', first.email) +
+        field('Mobile phone', first.mobile_phone) +
+        field('Supporter type', first.supporter_type) +
+        field('Acquisition date', first.acquisition_date) +
+        field('Recurring donor', recurring) +
+        field('Recurring status', first.recurring_donor_status) +
+        field('Membership status', first.membership_status) +
+      '</dl>' +
+      '<h3 class="panel-subhead">Payments</h3>' +
+      '<div class="panel-pay-scroll">' +
+        '<table class="panel-pay-table">' +
+          '<thead><tr><th scope="col">Date</th><th scope="col">Project</th><th scope="col" class="num">Amount</th></tr></thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+        '</table>' +
+      '</div>';
+
+    el.panelName.textContent = name;
+    state.panelSupporterId = sid;
+    state.lastFocused = document.activeElement;
+    el.panelBackdrop.hidden = false;
+    el.sidePanel.hidden = false;
+    el.sidePanel.setAttribute('aria-hidden', 'false');
+    el.panelClose.focus();
   }
 
-  // ---------------------------------------------------------------------------
-  // Init
-  // ---------------------------------------------------------------------------
-  loadTasks();
+  function closePanel() {
+    el.sidePanel.hidden = true;
+    el.sidePanel.setAttribute('aria-hidden', 'true');
+    el.panelBackdrop.hidden = true;
+    state.panelSupporterId = null;
+    if (state.lastFocused && typeof state.lastFocused.focus === 'function') {
+      state.lastFocused.focus();
+    }
+  }
+
+  // ---- events --------------------------------------------------------------
+
+  function bindEvents() {
+    el.searchInput.addEventListener('input', function () {
+      state.filters.search = el.searchInput.value;
+      state.page = 1;
+      render();
+    });
+
+    el.yearSelect.addEventListener('change', function () {
+      state.filters.year = el.yearSelect.value;
+      state.page = 1;
+      render();
+    });
+
+    el.methodSelect.addEventListener('change', function () {
+      state.filters.method = el.methodSelect.value;
+      state.page = 1;
+      render();
+    });
+
+    el.successOnly.addEventListener('change', function () {
+      state.filters.successOnly = el.successOnly.checked;
+      state.page = 1;
+      render();
+    });
+
+    el.prevBtn.addEventListener('click', function () {
+      if (state.page > 1) { state.page -= 1; render(); }
+    });
+    el.nextBtn.addEventListener('click', function () {
+      state.page += 1; render();
+    });
+
+    // sorting
+    var ths = el.tableScroll.querySelectorAll('th.sortable');
+    ths.forEach(function (th) {
+      var key = th.getAttribute('data-key');
+      var btn = th.querySelector('.sort-btn');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        if (state.sortKey === key) {
+          state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.sortKey = key;
+          state.sortDir = (key === 'amount_paid' || key === 'fee_amount' || key === 'payment_at') ? 'desc' : 'asc';
+        }
+        state.page = 1;
+        render();
+      });
+    });
+
+    // row / card selection (delegated)
+    function selectHandler(e) {
+      var target = e.target;
+      var row = target.closest ? target.closest('[data-sid]') : null;
+      if (row) openPanel(row.getAttribute('data-sid'));
+    }
+    el.tableBody.addEventListener('click', selectHandler);
+    el.cardList.addEventListener('click', selectHandler);
+    el.tableBody.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        var row = e.target.closest ? e.target.closest('[data-sid]') : null;
+        if (row) { e.preventDefault(); openPanel(row.getAttribute('data-sid')); }
+      }
+    });
+    el.cardList.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        var row = e.target.closest ? e.target.closest('[data-sid]') : null;
+        if (row) { e.preventDefault(); openPanel(row.getAttribute('data-sid')); }
+      }
+    });
+
+    // panel
+    el.panelClose.addEventListener('click', closePanel);
+    el.panelBackdrop.addEventListener('click', closePanel);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !el.sidePanel.hidden) closePanel();
+    });
+
+    // responsive re-render
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (state.records.length > 0) render();
+      }, 150);
+    });
+  }
+
+  // ---- load ----------------------------------------------------------------
+
+  function loadData() {
+    showState('loading');
+    fetch('api/supporters', { headers: { 'Accept': 'application/json' } })
+      .then(function (res) {
+        if (res.status === 401) {
+          showState('error', 'Your session has expired. Please sign in again.');
+          return;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.columns) || !Array.isArray(data.rows)) {
+          throw new Error('Unexpected data shape');
+        }
+        var built = buildRecords(data.columns, data.rows);
+        state.columns = data.columns;
+        state.rows = data.rows;
+        state.idx = built.idx;
+        state.records = built.records;
+
+        var kpi = computeKpis(state.records);
+        renderHeader(kpi);
+        renderKpis(kpi);
+
+        // build selects from data
+        var years = distinctValues(state.records, 'financial_year').sort(function (a, b) {
+          return b.localeCompare(a);
+        });
+        populateSelect(el.yearSelect, years, 'All years');
+        var methods = distinctValues(state.records, 'payment_method').sort(function (a, b) {
+          return a.localeCompare(b);
+        });
+        populateSelect(el.methodSelect, methods, 'All methods');
+
+        state.page = 1;
+        render();
+        window.knowiReportReady = true;
+      })
+      .catch(function (err) {
+        showState('error', 'Could not load supporter data. Please try again.');
+      });
+  }
+
+  function init() {
+    cacheEls();
+    bindEvents();
+    loadData();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
 })();
