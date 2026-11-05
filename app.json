@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Loan / Mortgage Calculator"}]}
+{"v":2,"service":"server/app.mjs","db":"db.json","bindings":[],"reportPages":[{"path":"/","title":"Task tracker"}]}
