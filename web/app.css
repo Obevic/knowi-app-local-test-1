@@ -1,10 +1,43 @@
-/* ===== Equipment Rental Desk — app.css ===== */
+/* ============================================================
+   Loan Calculator — app.css
+   Default Knowi look: white 236px sidebar, cool off-white canvas,
+   serif display face for titles/numbers, system sans for body.
+   ============================================================ */
 
-/* ---------- Reset & base ---------- */
+/* ---------- Reset & tokens ---------- */
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+}
+
+:root {
+  --text: #1E2F35;
+  --title: #273D44;
+  --primary: #375357;
+  --primary-hover: #273D44;
+  --link: #4E6E78;
+  --muted: #56666D;
+  --canvas: #F3F5F5;
+  --card: #FFFFFF;
+  --sunken: #EAEFEF;
+  --border: #DCE3E4;
+  --card-border: #E8EDEE;
+  --ok-fg: #276B5D;
+  --ok-bg: #E4F0EC;
+  --warn-fg: #7F5410;
+  --warn-bg: #F6ECD9;
+  --risk-fg: #9C2F3C;
+  --risk-bg: #F5E3E5;
+  --wait-fg: #5F4C38;
+  --wait-bg: #F1ECE6;
+
+  --serif: Charter, "Iowan Old Style", Georgia, serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --radius-card: 12px;
+  --radius-ctl: 9px;
+  --shadow-card: 0 1px 2px rgba(30, 47, 53, 0.04), 0 4px 14px rgba(30, 47, 53, 0.05);
 }
 
 html,
@@ -14,61 +47,37 @@ body {
 }
 
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--sans);
   font-size: 15px;
   line-height: 1.5;
-  color: #1E2F35;
-  background: #F3F5F5;
+  color: var(--text);
+  background: var(--canvas);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* Tabular figures for data */
-table,
-.col-date,
-.col-status,
-.nav-pill,
-.overdue-count {
+/* Tabular figures for numbers everywhere */
+.payment-value,
+.amort td,
+.amort th,
+.chart-axis,
+.chart-tick {
   font-variant-numeric: tabular-nums;
-}
-
-/* ---------- Accessibility helpers ---------- */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* Visible focus states */
-a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid #4E6E78;
-  outline-offset: 2px;
-  border-radius: 4px;
 }
 
 /* ---------- App shell ---------- */
 .app-shell {
   display: flex;
-  min-height: 100vh;
   align-items: stretch;
+  min-height: 100vh;
 }
 
 /* ---------- Sidebar ---------- */
 .sidebar {
-  width: 236px;
   flex: 0 0 236px;
-  background: #FFFFFF;
-  border-right: 1px solid #DCE3E4;
+  width: 236px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
   padding: 20px 16px;
@@ -77,33 +86,42 @@ select:focus-visible,
   height: 100vh;
 }
 
-.sidebar-logo {
+.brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 6px 18px;
-  border-bottom: 1px solid #EAEFEF;
-  margin-bottom: 16px;
+  padding: 6px 8px 18px;
 }
 
-.logo-mark {
-  color: #375357;
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: var(--sunken);
+  color: var(--primary);
   flex: 0 0 auto;
 }
 
-.logo-text {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-weight: 400;
-  font-size: 17px;
-  color: #273D44;
-  line-height: 1.2;
+.brand-mark svg {
+  display: block;
 }
 
-.sidebar-nav {
+.brand-name {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 19px;
+  color: var(--title);
+  letter-spacing: 0.1px;
+}
+
+.nav {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  flex: 1 1 auto;
+  margin-top: 4px;
 }
 
 .nav-link {
@@ -111,31 +129,30 @@ select:focus-visible,
   align-items: center;
   gap: 10px;
   padding: 9px 10px;
-  border-radius: 9px;
-  color: #56666D;
+  border-radius: var(--radius-ctl);
+  color: var(--muted);
   text-decoration: none;
   font-size: 15px;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .nav-link:hover {
-  background: #F3F5F5;
-  color: #273D44;
+  background: var(--sunken);
+  color: var(--title);
 }
 
-.nav-link.active {
-  background: #EAEFEF;
-  color: #273D44;
+.nav-link.is-active {
+  background: var(--sunken);
+  color: var(--title);
   font-weight: 600;
 }
 
 .nav-icon {
-  color: #4E6E78;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
-}
-
-.nav-link.active .nav-icon {
-  color: #375357;
+  color: inherit;
 }
 
 .nav-label {
@@ -143,448 +160,502 @@ select:focus-visible,
   min-width: 0;
 }
 
-.nav-pill {
+.pill {
   flex: 0 0 auto;
-  min-width: 24px;
+  min-width: 22px;
   padding: 1px 8px;
   border-radius: 999px;
-  background: #EAEFEF;
-  color: #56666D;
+  background: var(--sunken);
+  color: var(--muted);
   font-size: 12px;
-  font-weight: 600;
+  font-variant-numeric: tabular-nums;
   text-align: center;
+  line-height: 1.5;
 }
 
-.nav-link.active .nav-pill {
-  background: #DCE3E4;
-  color: #273D44;
-}
-
-.sidebar-footer {
-  border-top: 1px solid #EAEFEF;
-  padding-top: 14px;
-  margin-top: 12px;
-}
-
+/* Viewer pinned to bottom */
 .viewer {
+  margin-top: auto;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 4px 6px;
+  padding: 12px 8px 4px;
+  border-top: 1px solid var(--card-border);
 }
 
 .viewer-avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background: #EAEFEF;
-  color: #4E6E78;
+  background: var(--sunken);
+  color: var(--primary);
   flex: 0 0 auto;
 }
 
 .viewer-name {
   font-size: 14px;
-  color: #273D44;
-  font-weight: 600;
+  color: var(--title);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* ---------- Content ---------- */
-.content {
+/* ---------- Canvas / content ---------- */
+.canvas {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 28px 32px 48px;
+  padding: 32px 40px 64px;
 }
 
-.content > * {
+.canvas > * {
   max-width: 1360px;
-  margin-left: 0;
 }
 
-/* ---------- Page header ---------- */
-.page-header {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+.page-head {
+  margin-bottom: 24px;
 }
 
 .page-title {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
+  font-family: var(--serif);
   font-weight: 400;
   font-size: 30px;
-  line-height: 1.15;
-  color: #273D44;
+  line-height: 1.2;
+  color: var(--title);
+  margin: 0 0 8px;
+}
+
+.page-subtitle {
   margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+  max-width: 70ch;
 }
 
-.toolbar {
+/* ---------- Cards ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 22px 24px;
+  margin-bottom: 20px;
+}
+
+.card-title {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 20px;
+  color: var(--title);
+  margin: 0 0 16px;
+}
+
+/* ---------- Inputs ---------- */
+.inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px 20px;
+}
+
+.field {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
 }
 
-/* Search */
-.search-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--title);
+  letter-spacing: 0.2px;
 }
 
-.search-icon {
-  position: absolute;
-  left: 11px;
-  color: #56666D;
-  pointer-events: none;
-}
-
-.search-input {
-  width: 260px;
-  height: 38px;
-  padding: 0 12px 0 36px;
-  border: 1px solid #DCE3E4;
-  border-radius: 9px;
-  background: #FFFFFF;
-  color: #1E2F35;
-  font-size: 15px;
-  font-family: inherit;
-}
-
-.search-input::placeholder {
-  color: #56666D;
-}
-
-.search-input:focus {
-  border-color: #4E6E78;
-}
-
-/* Status filter */
-.filter-wrap {
-  display: inline-flex;
-}
-
-.status-select {
-  height: 38px;
-  padding: 0 34px 0 12px;
-  border: 1px solid #DCE3E4;
-  border-radius: 9px;
-  background-color: #FFFFFF;
-  background-image: none;
-  color: #1E2F35;
-  font-size: 15px;
-  font-family: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, #56666D 50%),
-    linear-gradient(135deg, #56666D 50%, transparent 50%);
-  background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-}
-
-.status-select:focus {
-  border-color: #4E6E78;
-}
-
-/* Overdue badge */
-.overdue-badge {
-  display: inline-flex;
+.field-control {
+  display: flex;
   align-items: center;
   gap: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-ctl);
+  padding: 0 12px;
   height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  background: #F5E3E5;
-  color: #9C2F3C;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.field-control:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(78, 110, 120, 0.18);
+}
+
+.field-prefix,
+.field-suffix {
+  color: var(--muted);
   font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.overdue-badge.is-zero {
-  background: #EAEFEF;
-  color: #56666D;
-}
-
-.overdue-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #9C2F3C;
   flex: 0 0 auto;
+  user-select: none;
 }
 
-.overdue-badge.is-zero .overdue-dot {
-  background: #56666D;
+.field-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  background: transparent;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--text);
+  padding: 0;
+  height: 100%;
+  font-variant-numeric: tabular-nums;
 }
 
-.overdue-label {
-  letter-spacing: 0.01em;
+.field-input:focus {
+  outline: none;
 }
 
-.overdue-count {
-  font-weight: 700;
+.field-input::placeholder {
+  color: #8A979C;
 }
 
-/* ---------- Card ---------- */
-.card {
-  background: #FFFFFF;
-  border: 1px solid #E8EDEE;
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(30, 47, 53, 0.04), 0 4px 12px rgba(30, 47, 53, 0.04);
+/* Hide number spinners for a cleaner ledger look */
+.field-input::-webkit-outer-spin-button,
+.field-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.field-input[type="number"] {
+  -moz-appearance: textfield;
 }
 
-.table-card {
+.field-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: var(--radius-ctl);
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #FFFFFF;
+}
+
+.btn-primary:hover {
+  background: var(--primary-hover);
+}
+
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--link);
+  border-color: var(--border);
+}
+
+.btn-ghost:hover {
+  background: var(--sunken);
+  color: var(--title);
+}
+
+/* ---------- Payment figure ---------- */
+.payment-figure {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.payment-value {
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1.1;
+  color: var(--title);
+}
+
+.payment-unit {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.payment-note {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ---------- Chart ---------- */
+.chart-wrap {
+  width: 100%;
   overflow: hidden;
 }
 
-/* ---------- Table ---------- */
-.table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-#rentalTable {
+.chart {
+  display: block;
   width: 100%;
-  border-collapse: collapse;
+  height: auto;
+  max-width: 100%;
+}
+
+/* SVG text — explicit fill/stroke/font-size so nothing renders black */
+.chart-empty {
+  fill: var(--muted);
+  stroke: none;
   font-size: 15px;
-  min-width: 640px;
+  font-family: var(--sans);
 }
 
-#rentalTable thead th {
-  background: #EAEFEF;
-  color: #56666D;
-  font-weight: 600;
+.chart-axis {
+  fill: var(--muted);
+  stroke: none;
   font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-family: var(--sans);
+}
+
+.chart-tick {
+  fill: var(--muted);
+  stroke: none;
+  font-size: 11px;
+  font-family: var(--sans);
+}
+
+.chart-line {
+  fill: none;
+  stroke: var(--link);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-area {
+  fill: rgba(78, 110, 120, 0.10);
+  stroke: none;
+}
+
+.chart-grid {
+  fill: none;
+  stroke: var(--card-border);
+  stroke-width: 1;
+}
+
+.chart-dot {
+  fill: var(--link);
+  stroke: var(--card);
+  stroke-width: 1.5;
+}
+
+/* ---------- Amortization table ---------- */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-ctl);
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.amort {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.amort thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--sunken);
+  color: var(--title);
+  font-weight: 600;
+  text-align: right;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.amort thead th.col-month {
   text-align: left;
-  padding: 12px 16px;
-  border-bottom: 1px solid #DCE3E4;
+}
+
+.amort td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--card-border);
+  text-align: right;
+  color: var(--text);
   white-space: nowrap;
 }
 
-#rentalTable tbody td {
-  padding: 13px 16px;
-  border-bottom: 1px solid #EAEFEF;
-  vertical-align: middle;
-  color: #1E2F35;
+.amort td.col-month {
+  text-align: left;
+  color: var(--muted);
 }
 
-#rentalTable tbody tr:last-child td {
-  border-bottom: none;
+.amort tbody tr:nth-child(even) td {
+  background: #FAFBFB;
 }
 
-#rentalTable tbody tr:hover {
-  background: #F3F5F5;
+.amort tbody tr:hover td {
+  background: var(--sunken);
 }
 
-/* Column widths */
-.col-item {
-  width: 30%;
+.row-empty td {
+  text-align: center;
+  color: var(--muted);
+  padding: 28px 14px;
+  white-space: normal;
 }
 
-.col-customer {
-  width: 26%;
+/* ---------- Table footer ---------- */
+.table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
 }
 
-.col-date {
-  width: 16%;
+.table-count {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
-.col-status {
-  width: 14%;
-}
-
-/* Cell content */
-.cell-item {
-  font-family: Charter, 'Iowan Old Style', Georgia, serif;
-  font-weight: 400;
-  font-size: 16px;
-  color: #273D44;
-}
-
-.cell-customer {
-  color: #1E2F35;
-}
-
-.cell-date {
-  color: #56666D;
-  white-space: nowrap;
-}
-
-.cell-status {
-  white-space: nowrap;
-}
-
-/* ---------- Status pill chips ---------- */
-.status-pill {
+/* ---------- Status chip (state color, not decoration) ---------- */
+.status-chip {
   display: inline-flex;
   align-items: center;
-  padding: 3px 11px;
+  gap: 6px;
+  padding: 3px 10px;
   border-radius: 999px;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
-  line-height: 1.4;
-  white-space: nowrap;
+  line-height: 1.5;
 }
 
-.status-active {
-  background: #E4F0EC;
-  color: #276B5D;
+.status-chip.is-ok {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
 }
 
-.status-returned {
-  background: #EAEFEF;
-  color: #56666D;
+.status-chip.is-warn {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
 }
 
-.status-overdue {
-  background: #F5E3E5;
-  color: #9C2F3C;
+.status-chip.is-risk {
+  background: var(--risk-bg);
+  color: var(--risk-fg);
 }
 
-/* ---------- Empty state ---------- */
-.table-empty {
-  padding: 40px 24px;
-  text-align: center;
-  color: #56666D;
-  font-size: 15px;
+.status-chip.is-wait {
+  background: var(--wait-bg);
+  color: var(--wait-fg);
 }
 
-.table-empty p {
-  margin: 0;
+/* ---------- Focus visibility (global) ---------- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--link);
+  outline-offset: 2px;
 }
 
-/* ---------- Loading skeleton ---------- */
-.loading-skeleton {
-  position: fixed;
-  inset: 0;
-  background: #F3F5F5;
-  z-index: 50;
-  padding: 28px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.loading-skeleton[hidden] {
-  display: none !important;
-}
-
-.skel {
-  border-radius: 8px;
-  background: linear-gradient(90deg, #EAEFEF 25%, #F3F5F5 50%, #EAEFEF 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-.skel-title {
-  height: 34px;
-  width: 220px;
-}
-
-.skel-row {
-  height: 44px;
-  width: 100%;
-  max-width: 1360px;
-}
-
-@keyframes shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
-  }
-}
-
-/* ---------- Responsive: sidebar becomes top bar ---------- */
+/* ---------- Responsive: sidebar -> top bar ---------- */
 @media (max-width: 860px) {
   .app-shell {
     flex-direction: column;
   }
 
   .sidebar {
-    width: 100%;
     flex: 0 0 auto;
+    width: 100%;
     height: auto;
     position: static;
     border-right: none;
-    border-bottom: 1px solid #DCE3E4;
+    border-bottom: 1px solid var(--border);
     padding: 14px 16px;
   }
 
-  .sidebar-logo {
-    border-bottom: none;
-    margin-bottom: 10px;
-    padding-bottom: 0;
+  .brand {
+    padding-bottom: 12px;
   }
 
-  .sidebar-nav {
+  .nav {
     flex-direction: row;
-    flex: 0 0 auto;
+    margin-top: 0;
+    overflow-x: auto;
   }
 
   .nav-link {
-    flex: 1 1 auto;
-    justify-content: center;
-  }
-
-  .sidebar-footer {
-    border-top: none;
-    margin-top: 0;
-    padding-top: 0;
+    flex: 0 0 auto;
   }
 
   .viewer {
-    display: none;
+    margin-top: 12px;
+    border-top: none;
+    padding-top: 0;
   }
 
-  .content {
-    padding: 20px 16px 40px;
+  .canvas {
+    padding: 24px 18px 48px;
   }
 
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
+  .page-title {
+    font-size: 25px;
   }
 
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
+  .inputs {
+    grid-template-columns: 1fr;
   }
 
-  .search-wrap,
-  .filter-wrap {
+  .field-actions {
+    justify-content: stretch;
+  }
+
+  .field-actions .btn {
     width: 100%;
   }
 
-  .search-input,
-  .status-select {
-    width: 100%;
-  }
-
-  .overdue-badge {
-    align-self: flex-start;
+  .payment-value {
+    font-size: 36px;
   }
 }
 
 /* ---------- Print: hide chrome ---------- */
 @media print {
   .sidebar,
-  .toolbar,
-  .loading-skeleton {
+  .nav,
+  .viewer,
+  .field-actions,
+  .table-foot {
     display: none !important;
   }
 
@@ -592,21 +663,19 @@ select:focus-visible,
     display: block;
   }
 
-  .content {
+  .canvas {
     padding: 0;
   }
 
   .card {
     box-shadow: none;
-    border: 1px solid #DCE3E4;
+    border: 1px solid var(--border);
+    break-inside: avoid;
   }
 
-  .table-scroll {
+  .table-wrap {
+    max-height: none;
     overflow: visible;
-  }
-
-  #rentalTable {
-    min-width: 0;
   }
 }
 

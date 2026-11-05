@@ -1,101 +1,132 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Equipment Rental Desk</title>
-  <link rel="stylesheet" href="app.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Loan Calculator</title>
+  <link rel="stylesheet" href="app.css" />
 </head>
 <body>
   <div class="app-shell">
-    <aside class="sidebar" id="sidebar">
-      <div class="sidebar-logo">
-        <svg class="logo-mark" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-          <rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
-          <path d="M3 9h18" stroke="currentColor" stroke-width="1.6"></path>
-          <circle cx="7" cy="6.5" r="1" fill="currentColor"></circle>
-          <circle cx="10" cy="6.5" r="1" fill="currentColor"></circle>
-        </svg>
-        <span class="logo-text">Equipment Rental Desk</span>
-      </div>
-      <nav class="sidebar-nav" aria-label="Primary">
-        <a class="nav-link active" href="#" aria-current="page">
-          <svg class="nav-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path d="M4 5h16v14H4z" fill="none" stroke="currentColor" stroke-width="1.6"></path>
-            <path d="M4 10h16M9 5v14" stroke="currentColor" stroke-width="1.6"></path>
+    <aside class="sidebar" aria-label="Primary">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 19V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13" />
+            <path d="M4 19h16" />
+            <path d="M8 10h8" />
+            <path d="M8 14h5" />
           </svg>
-          <span class="nav-label">Rental Desk</span>
-          <span class="nav-pill" id="navCount" aria-hidden="true">0</span>
-        </a>
-      </nav>
-      <div class="sidebar-footer">
-        <div class="viewer">
-          <span class="viewer-avatar" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18">
-              <circle cx="12" cy="9" r="4" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
-              <path d="M4 20c0-4 4-6 8-6s8 2 8 6" fill="none" stroke="currentColor" stroke-width="1.6"></path>
+        </span>
+        <span class="brand-name">Loan Calculator</span>
+      </div>
+
+      <nav class="nav" aria-label="Sections">
+        <a class="nav-link is-active" href="#calculator" aria-current="page">
+          <span class="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="2" />
+              <path d="M8 7h8" />
+              <path d="M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01" />
             </svg>
           </span>
-          <span class="viewer-name" id="viewerName">Signed in</span>
-        </div>
+          <span class="nav-label">Calculator</span>
+          <span class="pill" id="navCount" aria-hidden="true">0</span>
+        </a>
+      </nav>
+
+      <div class="viewer">
+        <span class="viewer-avatar" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 20c0-3.3 3.6-5 8-5s8 1.7 8 5" />
+          </svg>
+        </span>
+        <span class="viewer-name" id="viewerName">Guest</span>
       </div>
     </aside>
 
-    <main class="content">
-      <header class="page-header">
-        <h1 class="page-title">Rental Desk</h1>
-        <div class="toolbar">
-          <div class="search-wrap">
-            <label class="sr-only" for="search">Search rentals</label>
-            <svg class="search-icon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="1.6"></circle>
-              <path d="M20 20l-4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
-            </svg>
-            <input type="search" id="search" class="search-input" placeholder="Search item or customer" autocomplete="off">
-          </div>
-          <div class="filter-wrap">
-            <label class="sr-only" for="statusFilter">Filter by status</label>
-            <select id="statusFilter" class="status-select">
-              <option value="">All statuses</option>
-            </select>
-          </div>
-          <span class="overdue-badge" id="overdueBadge" title="Overdue rentals">
-            <span class="overdue-dot" aria-hidden="true"></span>
-            <span class="overdue-label">Overdue</span>
-            <span class="overdue-count" id="overdueCount">0</span>
-          </span>
-        </div>
+    <main class="canvas" id="calculator">
+      <header class="page-head">
+        <h1 class="page-title">Loan &amp; mortgage calculator</h1>
+        <p class="page-subtitle">Enter a loan amount, annual interest rate and term to see the monthly payment, the balance over time, and a full amortization schedule.</p>
       </header>
 
-      <section class="card table-card" aria-labelledby="tableHeading">
-        <div class="table-scroll">
-          <table id="rentalTable">
-            <caption id="tableHeading" class="sr-only">Equipment rentals</caption>
+      <section class="card" aria-labelledby="inputsHeading">
+        <h2 class="card-title" id="inputsHeading">Inputs</h2>
+        <form class="inputs" id="calcForm" novalidate>
+          <div class="field">
+            <label class="field-label" for="loanAmount">Loan amount</label>
+            <div class="field-control">
+              <span class="field-prefix" aria-hidden="true">$</span>
+              <input class="field-input" type="number" id="loanAmount" name="loanAmount" min="0" step="100" inputmode="decimal" placeholder="250000" value="250000" required />
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="interestRate">Annual interest rate</label>
+            <div class="field-control">
+              <input class="field-input" type="number" id="interestRate" name="interestRate" min="0" max="100" step="0.01" inputmode="decimal" placeholder="6.5" value="6.5" required />
+              <span class="field-suffix" aria-hidden="true">%/yr</span>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="termYears">Term</label>
+            <div class="field-control">
+              <input class="field-input" type="number" id="termYears" name="termYears" min="1" max="50" step="1" inputmode="numeric" placeholder="30" value="30" required />
+              <span class="field-suffix" aria-hidden="true">years</span>
+            </div>
+          </div>
+
+          <div class="field-actions">
+            <button class="btn btn-primary" type="submit" id="calcBtn">Calculate</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card" aria-labelledby="paymentHeading">
+        <h2 class="card-title" id="paymentHeading">Monthly payment</h2>
+        <div class="payment-figure">
+          <span class="payment-value" id="monthlyPayment">$0.00</span>
+          <span class="payment-unit" aria-hidden="true">/ month</span>
+        </div>
+        <p class="payment-note" id="paymentNote">Enter a loan amount, rate and term, then press Calculate.</p>
+      </section>
+
+      <section class="card" aria-labelledby="chartHeading">
+        <h2 class="card-title" id="chartHeading">Balance over time</h2>
+        <div class="chart-wrap">
+          <svg class="chart" id="balanceChart" viewBox="0 0 720 320" role="img" aria-label="Line chart of remaining loan balance over the term" preserveAspectRatio="xMidYMid meet">
+            <text class="chart-empty" x="360" y="160" text-anchor="middle">No data yet</text>
+          </svg>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="tableHeading">
+        <h2 class="card-title" id="tableHeading">Amortization schedule</h2>
+        <div class="table-wrap">
+          <table class="amort" id="amortTable">
             <thead>
               <tr>
-                <th scope="col" class="col-item">Item</th>
-                <th scope="col" class="col-customer">Customer</th>
-                <th scope="col" class="col-date">Start</th>
-                <th scope="col" class="col-date">Due</th>
-                <th scope="col" class="col-status">Status</th>
+                <th scope="col" class="col-month">Month</th>
+                <th scope="col" class="col-num">Payment</th>
+                <th scope="col" class="col-num">Principal</th>
+                <th scope="col" class="col-num">Interest</th>
+                <th scope="col" class="col-num">Remaining balance</th>
               </tr>
             </thead>
-            <tbody id="rentalBody"></tbody>
+            <tbody id="amortBody">
+              <tr class="row-empty"><td colspan="5">No schedule yet. Calculate a loan to build the table.</td></tr>
+            </tbody>
           </table>
         </div>
-        <div class="table-empty" id="tableEmpty" hidden>
-          <p>No rentals match your search or filter.</p>
+        <div class="table-foot">
+          <span class="table-count" id="tableCount" aria-live="polite"></span>
+          <button class="btn btn-ghost" type="button" id="showMoreBtn" hidden>Show more</button>
         </div>
       </section>
     </main>
-  </div>
-
-  <div class="loading-skeleton" id="loadingSkeleton" aria-hidden="true">
-    <div class="skel skel-title"></div>
-    <div class="skel skel-row"></div>
-    <div class="skel skel-row"></div>
-    <div class="skel skel-row"></div>
-    <div class="skel skel-row"></div>
   </div>
 
   <script src="app.js"></script>
