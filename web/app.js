@@ -3,22 +3,23 @@ window.knowiReportReady = false;
 (function () {
   'use strict';
 
-  var body = document.getElementById('rentalsBody');
-  var searchInput = document.getElementById('searchInput');
-  var statusSelect = document.getElementById('statusSelect');
-  var overdueCountEl = document.getElementById('overdueCount');
-  var navCountEl = document.getElementById('navCount');
-  var loadingState = document.getElementById('loadingState');
-  var emptyState = document.getElementById('emptyState');
-  var errorState = document.getElementById('errorState');
-  var retryBtn = document.getElementById('retryBtn');
+  var body = document.getElementById('rentalBody');
+  var searchInput = document.getElementById('search');
+  var statusFilter = document.getElementById('statusFilter');
+  var overdueCount = document.getElementById('overdueCount');
+  var overdueBadge = document.getElementById('overdueBadge');
+  var navCount = document.getElementById('navCount');
+  var tableEmpty = document.getElementById('tableEmpty');
+  var skeleton = document.getElementById('loadingSkeleton');
+  var viewerName = document.getElementById('viewerName');
 
   var allRentals = [];
-  var statusOptions = [];
-  var searchTimer = null;
+  var filtered = [];
+  var searchTerm = '';
+  var statusValue = '';
 
-  function escapeHtml(value) {
-    return String(value)
+  function escapeHtml(s) {
+    return String(s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
@@ -26,148 +27,138 @@ window.knowiReportReady = false;
       .replace(/'/g, '&#39;');
   }
 
-  function formatDate(iso) {
-    if (!iso) return '—';
+  function fmtDate(iso) {
+    if (!iso) return '';
     var d = new Date(iso);
-    if (isNaN(d.getTime())) return '—';
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var day = d.getDate();
-    var month = months[d.getMonth()];
-    var year = d.getFullYear();
-    return month + ' ' + day + ', ' + year;
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
 
   function statusClass(status) {
-    if (status === 'Returned') return 'pill pill-returned';
     if (status === 'Overdue') return 'pill pill-overdue';
+    if (status === 'Returned') return 'pill pill-returned';
     return 'pill pill-active';
   }
 
-  function buildStatusOptions() {
-    var seen = {};
-    var list = [];
-    for (var i = 0; i < allRentals.length; i++) {
-      var s = allRentals[i].status;
-      if (!seen[s]) {
-        seen[s] = true;
-        list.push(s);
+  function applyFilters() {
+    var term = searchTerm.trim().toLowerCase();
+    filtered = allRentals.filter(function (r) {
+      if (statusValue && r.status !== statusValue) return false;
+      if (term) {
+        var hay = (r.item + ' ' + r.customer).toLowerCase();
+        if (hay.indexOf(term) === -1) return false;
       }
-    }
-    list.sort(function (a, b) { return a.localeCompare(b); });
-    statusOptions = list;
-
-    var current = statusSelect.value;
-    statusSelect.innerHTML = '';
-    var allOpt = document.createElement('option');
-    allOpt.value = 'All';
-    allOpt.textContent = 'All';
-    statusSelect.appendChild(allOpt);
-    for (var j = 0; j < list.length; j++) {
-      var opt = document.createElement('option');
-      opt.value = list[j];
-      opt.textContent = list[j];
-      statusSelect.appendChild(opt);
-    }
-    if (current && list.indexOf(current) !== -1) {
-      statusSelect.value = current;
-    } else {
-      statusSelect.value = 'All';
-    }
+      return true;
+    });
   }
 
-  function updateCounts() {
+  function render() {
+    applyFilters();
+
     var overdue = 0;
     for (var i = 0; i < allRentals.length; i++) {
       if (allRentals[i].status === 'Overdue') overdue++;
     }
-    overdueCountEl.textContent = String(overdue);
-    navCountEl.textContent = String(allRentals.length);
-  }
+    overdueCount.textContent = String(overdue);
+    overdueBadge.classList.toggle('is-zero', overdue === 0);
+    navCount.textContent = String(allRentals.length);
 
-  function getFiltered() {
-    var term = (searchInput.value || '').trim().toLowerCase();
-    var status = statusSelect.value;
-    var out = [];
-    for (var i = 0; i < allRentals.length; i++) {
-      var r = allRentals[i];
-      if (status !== 'All' && r.status !== status) continue;
-      if (term) {
-        var hay = (r.item + ' ' + r.customer).toLowerCase();
-        if (hay.indexOf(term) === -1) continue;
-      }
-      out.push(r);
-    }
-    return out;
-  }
-
-  function renderRows(rows) {
-    if (!rows.length) {
+    if (filtered.length === 0) {
       body.innerHTML = '';
-      loadingState.hidden = true;
-      errorState.hidden = true;
-      emptyState.hidden = false;
-      return;
-    }
-    emptyState.hidden = true;
-    var html = '';
-    for (var i = 0; i < rows.length; i++) {
-      var r = rows[i];
-      html +=
-        '<tr>' +
+      tableEmpty.hidden = false;
+    } else {
+      tableEmpty.hidden = true;
+      var html = '';
+      for (var j = 0; j < filtered.length; j++) {
+        var r = filtered[j];
+        html +=
+          '<tr>' +
           '<td class="cell-item">' + escapeHtml(r.item) + '</td>' +
           '<td class="cell-customer">' + escapeHtml(r.customer) + '</td>' +
-          '<td class="cell-date">' + formatDate(r.start) + '</td>' +
-          '<td class="cell-date">' + formatDate(r.due) + '</td>' +
+          '<td class="cell-date">' + fmtDate(r.start) + '</td>' +
+          '<td class="cell-date">' + fmtDate(r.due) + '</td>' +
           '<td class="cell-status"><span class="' + statusClass(r.status) + '">' + escapeHtml(r.status) + '</span></td>' +
-        '</tr>';
+          '</tr>';
+      }
+      body.innerHTML = html;
     }
-    body.innerHTML = html;
   }
 
-  function render() {
-    var rows = getFiltered();
-    renderRows(rows);
+  function buildStatusOptions() {
+    var seen = {};
+    var order = [];
+    for (var i = 0; i < allRentals.length; i++) {
+      var s = allRentals[i].status;
+      if (!seen[s]) {
+        seen[s] = true;
+        order.push(s);
+      }
+    }
+    var html = '<option value="">All statuses</option>';
+    for (var j = 0; j < order.length; j++) {
+      html += '<option value="' + escapeHtml(order[j]) + '">' + escapeHtml(order[j]) + '</option>';
+    }
+    statusFilter.innerHTML = html;
   }
 
-  function showError() {
-    loadingState.hidden = true;
-    emptyState.hidden = true;
-    errorState.hidden = false;
+  function showSkeleton() {
+    if (skeleton) skeleton.hidden = false;
+  }
+
+  function hideSkeleton() {
+    if (skeleton) skeleton.hidden = true;
   }
 
   function load() {
-    loadingState.hidden = false;
-    emptyState.hidden = true;
-    errorState.hidden = true;
-    body.innerHTML = '';
-
+    showSkeleton();
     fetch('api/rentals', { headers: { Accept: 'application/json' } })
       .then(function (res) {
+        if (res.status === 401) {
+          hideSkeleton();
+          window.knowiReportReady = true;
+          return;
+        }
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.json();
       })
       .then(function (data) {
-        allRentals = (data && data.rentals) ? data.rentals : [];
+        hideSkeleton();
+        if (!data || !Array.isArray(data.rentals)) {
+          allRentals = [];
+        } else {
+          allRentals = data.rentals;
+        }
         buildStatusOptions();
-        updateCounts();
-        loadingState.hidden = true;
         render();
         window.knowiReportReady = true;
       })
       .catch(function () {
-        showError();
+        hideSkeleton();
+        allRentals = [];
+        buildStatusOptions();
+        render();
         window.knowiReportReady = true;
       });
   }
 
-  function onSearchInput() {
-    if (searchTimer) clearTimeout(searchTimer);
-    searchTimer = setTimeout(render, 120);
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      searchTerm = searchInput.value;
+      render();
+    });
   }
 
-  if (searchInput) searchInput.addEventListener('input', onSearchInput);
-  if (statusSelect) statusSelect.addEventListener('change', render);
-  if (retryBtn) retryBtn.addEventListener('click', load);
+  if (statusFilter) {
+    statusFilter.addEventListener('change', function () {
+      statusValue = statusFilter.value;
+      render();
+    });
+  }
+
+  if (viewerName) {
+    var u = window.__knowiUser;
+    if (u && u.name) viewerName.textContent = u.name;
+  }
 
   load();
 })();
