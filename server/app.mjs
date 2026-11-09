@@ -136,5 +136,9 @@ app.use((req, res, next) => {
   res.sendFile(indexHtmlPath);
 });
 
+if (!process.env.TICKET_LIMIT) {
+  throw new Error('Startup self-check failed: TICKET_LIMIT is not configured');
+}
+
 const port = Number(process.env.PORT);
 app.listen(port, '0.0.0.0');
