@@ -1,183 +1,155 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Victor Helpdesk</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Victor Expenses</title>
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 13a8 8 0 0 1 16 0"></path>
-            <path d="M4 13h3v5H4z"></path>
-            <path d="M20 13h-3v5h3z"></path>
-            <path d="M7 18v1a3 3 0 0 0 3 3h3"></path>
+      <div class="sidebar-top">
+        <div class="logo">
+          <svg class="logo-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+            <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.6"></line>
+            <line x1="7" y1="13" x2="13" y2="13" stroke="currentColor" stroke-width="1.6"></line>
+            <line x1="7" y1="16.5" x2="11" y2="16.5" stroke="currentColor" stroke-width="1.6"></line>
           </svg>
-        </span>
-        <span class="brand-name">Victor Helpdesk</span>
+          <span class="logo-name">Victor Expenses</span>
+        </div>
+        <nav class="nav" aria-label="Primary">
+          <a class="nav-link" href="#" aria-current="page">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 6h16M4 12h16M4 18h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"></path>
+            </svg>
+            <span class="nav-label">Expenses</span>
+            <span class="count-pill" id="expense-count" aria-hidden="true">0</span>
+          </a>
+        </nav>
       </div>
-
-      <nav class="nav" aria-label="Primary">
-        <a class="nav-link" href="#" data-nav="all">
-          <span class="nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-              <path d="M3 9h18"></path>
-              <path d="M8 4v5"></path>
-            </svg>
+      <div class="sidebar-bottom">
+        <div class="viewer" id="viewer" hidden>
+          <span class="viewer-avatar" aria-hidden="true"></span>
+          <span class="viewer-meta">
+            <span class="viewer-name" id="viewer-name"></span>
+            <span class="viewer-email" id="viewer-email"></span>
           </span>
-          <span class="nav-label">All tickets</span>
-          <span class="nav-count" id="count-all" data-count="all">0</span>
-        </a>
-        <a class="nav-link" href="#" data-nav="open">
-          <span class="nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="M12 8v4"></path>
-              <path d="M12 16h.01"></path>
-            </svg>
-          </span>
-          <span class="nav-label">Open</span>
-          <span class="nav-count" id="count-open" data-count="open">0</span>
-        </a>
-        <a class="nav-link" href="#" data-nav="inprogress">
-          <span class="nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 12a9 9 0 1 1-3-6.7"></path>
-              <path d="M21 4v5h-5"></path>
-            </svg>
-          </span>
-          <span class="nav-label">In progress</span>
-          <span class="nav-count" id="count-inprogress" data-count="inprogress">0</span>
-        </a>
-        <a class="nav-link" href="#" data-nav="resolved">
-          <span class="nav-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9"></circle>
-              <path d="M8 12l3 3 5-6"></path>
-            </svg>
-          </span>
-          <span class="nav-label">Resolved</span>
-          <span class="nav-count" id="count-resolved" data-count="resolved">0</span>
-        </a>
-      </nav>
-
-      <div class="viewer" id="viewer" hidden>
-        <span class="viewer-avatar" id="viewer-avatar" aria-hidden="true"></span>
-        <span class="viewer-meta">
-          <span class="viewer-name" id="viewer-name"></span>
-          <span class="viewer-email" id="viewer-email"></span>
-        </span>
+        </div>
       </div>
     </aside>
 
-    <main class="content">
-      <div class="content-inner">
+    <main class="canvas">
+      <div class="content">
         <header class="page-head">
-          <div>
-            <h1 class="page-title">Ticket board</h1>
-            <p class="page-sub">Support queue for the Victor IT helpdesk.</p>
+          <div class="page-head-text">
+            <h1 class="page-title">Team expenses</h1>
+            <p class="page-sub">Track what the team spends, by category and by month.</p>
           </div>
+          <button type="button" class="btn btn-primary" id="add-btn">
+            <svg class="btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            </svg>
+            Add expense
+          </button>
         </header>
 
-        <section class="kpis" id="kpis" aria-label="Key metrics">
-          <div class="kpi-card">
-            <span class="kpi-label">Open</span>
-            <span class="kpi-value" id="kpi-open">0</span>
-            <span class="kpi-hint">Awaiting a first response</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">In progress</span>
-            <span class="kpi-value" id="kpi-inprogress">0</span>
-            <span class="kpi-hint">Being worked on now</span>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Resolved today</span>
-            <span class="kpi-value" id="kpi-resolved">0</span>
-            <span class="kpi-hint">Closed on the latest day</span>
-          </div>
-        </section>
-
-        <section class="panel" aria-label="Ticket list">
-          <div class="panel-head">
-            <h2 class="panel-title">Tickets</h2>
-            <div class="filters">
-              <label class="field">
-                <span class="field-label">Category</span>
-                <select id="filter-category" class="select" aria-label="Filter by category">
-                  <option value="">All categories</option>
-                </select>
-              </label>
-              <label class="field">
-                <span class="field-label">Status</span>
-                <select id="filter-status" class="select" aria-label="Filter by status">
-                  <option value="">All statuses</option>
-                </select>
-              </label>
+        <section class="card" id="add-card" aria-labelledby="add-card-title">
+          <h2 class="card-title" id="add-card-title">Add an expense</h2>
+          <form id="add-form" novalidate>
+            <div class="form-grid">
+              <div class="field">
+                <label class="field-label" for="f-date">Date</label>
+                <input class="input" type="date" id="f-date" name="date" required>
+              </div>
+              <div class="field">
+                <label class="field-label" for="f-category">Category</label>
+                <input class="input" type="text" id="f-category" name="category" list="category-list" placeholder="e.g. Travel" required autocomplete="off">
+                <datalist id="category-list"></datalist>
+              </div>
+              <div class="field">
+                <label class="field-label" for="f-amount">Amount</label>
+                <div class="amount-wrap">
+                  <span class="amount-prefix" aria-hidden="true">$</span>
+                  <input class="input" type="number" id="f-amount" name="amount" min="0" step="0.01" placeholder="0.00" required inputmode="decimal">
+                </div>
+              </div>
+              <div class="field field-wide">
+                <label class="field-label" for="f-note">Note</label>
+                <input class="input" type="text" id="f-note" name="note" placeholder="Optional detail" autocomplete="off">
+              </div>
             </div>
-          </div>
-
-          <div class="table-wrap">
-            <table class="tickets-table" id="tickets-table">
-              <thead>
-                <tr>
-                  <th scope="col" data-key="id" aria-sort="none"><button class="th-btn" type="button">ID</button></th>
-                  <th scope="col" data-key="subject" aria-sort="none"><button class="th-btn" type="button">Subject</button></th>
-                  <th scope="col" data-key="requester" aria-sort="none"><button class="th-btn" type="button">Requester</button></th>
-                  <th scope="col" data-key="category" aria-sort="none"><button class="th-btn" type="button">Category</button></th>
-                  <th scope="col" data-key="priority" aria-sort="none"><button class="th-btn" type="button">Priority</button></th>
-                  <th scope="col" data-key="status" aria-sort="none"><button class="th-btn" type="button">Status</button></th>
-                  <th scope="col" data-key="created" aria-sort="none"><button class="th-btn" type="button">Created</button></th>
-                </tr>
-              </thead>
-              <tbody id="tickets-body"></tbody>
-            </table>
-          </div>
-
-          <div class="table-foot">
-            <span class="table-count" id="table-count">0 tickets</span>
-            <button class="btn btn-ghost" id="show-more" type="button" hidden>Show more</button>
-          </div>
-        </section>
-
-        <section class="detail" id="detail" hidden aria-label="Ticket details">
-          <div class="detail-head">
-            <div>
-              <span class="detail-id" id="detail-id"></span>
-              <h2 class="detail-title" id="detail-title"></h2>
+            <div class="form-foot">
+              <p class="form-msg" id="form-msg" role="status" aria-live="polite"></p>
+              <button type="submit" class="btn btn-primary" id="form-submit">Save expense</button>
             </div>
-            <button class="btn btn-ghost" id="detail-close" type="button">Close</button>
-          </div>
-          <dl class="detail-facts">
-            <div class="fact"><dt>Requester</dt><dd id="detail-requester"></dd></div>
-            <div class="fact"><dt>Category</dt><dd id="detail-category"></dd></div>
-            <div class="fact"><dt>Priority</dt><dd id="detail-priority"></dd></div>
-            <div class="fact"><dt>Created</dt><dd id="detail-created"></dd></div>
-          </dl>
-          <form class="detail-form" id="status-form">
-            <label class="field">
-              <span class="field-label">Update status</span>
-              <select id="status-select" class="select" aria-label="New status"></select>
-            </label>
-            <button class="btn btn-primary" id="status-save" type="submit">Save status</button>
-            <span class="form-msg" id="form-msg" role="status" aria-live="polite"></span>
           </form>
         </section>
 
-        <div class="state" id="state" hidden>
-          <div class="state-card">
-            <span class="state-icon" id="state-icon" aria-hidden="true"></span>
-            <h2 class="state-title" id="state-title"></h2>
-            <p class="state-body" id="state-body"></p>
-            <a class="btn btn-primary" id="state-action" href="login" hidden>Sign in again</a>
+        <section class="card" aria-labelledby="chart-card-title">
+          <div class="card-head">
+            <h2 class="card-title" id="chart-card-title">Spending by category</h2>
+            <span class="card-sub" id="chart-month"></span>
           </div>
-        </div>
+          <div class="chart-wrap">
+            <div class="chart" id="chart"></div>
+            <p class="chart-empty" id="chart-empty" hidden>No expenses recorded for this month yet.</p>
+          </div>
+        </section>
+
+        <section class="card" aria-labelledby="table-card-title">
+          <div class="card-head">
+            <h2 class="card-title" id="table-card-title">All expenses</h2>
+            <span class="card-sub" id="table-count"></span>
+          </div>
+          <div class="table-wrap" id="table-wrap">
+            <table class="exp-table" id="exp-table">
+              <thead>
+                <tr>
+                  <th scope="col" class="col-date">Date</th>
+                  <th scope="col" class="col-cat">Category</th>
+                  <th scope="col" class="col-note">Note</th>
+                  <th scope="col" class="col-amt">Amount</th>
+                </tr>
+              </thead>
+              <tbody id="exp-body"></tbody>
+            </table>
+            <p class="table-empty" id="table-empty" hidden>No expenses yet. Add your first one above.</p>
+          </div>
+        </section>
       </div>
     </main>
+  </div>
+
+  <div class="state-layer" id="loading" hidden>
+    <div class="skeleton-card">
+      <div class="sk-line sk-title"></div>
+      <div class="sk-line sk-sub"></div>
+      <div class="sk-rows">
+        <div class="sk-row"></div>
+        <div class="sk-row"></div>
+        <div class="sk-row"></div>
+        <div class="sk-row"></div>
+        <div class="sk-row"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-layer" id="error" hidden>
+    <div class="state-box">
+      <h2 class="state-title">Something went wrong</h2>
+      <p class="state-text" id="error-text">We couldn't load your expenses.</p>
+      <button type="button" class="btn btn-primary" id="retry-btn">Try again</button>
+    </div>
+  </div>
+
+  <div class="state-layer" id="session-expired" hidden>
+    <div class="state-box">
+      <h2 class="state-title">Your session has expired</h2>
+      <p class="state-text">Please sign in again to continue tracking expenses.</p>
+      <a class="btn btn-primary" href="login" id="login-link">Sign in</a>
+    </div>
   </div>
 
   <script src="app.js"></script>
