@@ -1,1 +1,1 @@
-{"v":2,"service":"server/app.mjs","bindings":[],"reportPages":[{"path":"/","title":"Team Expense Tracker"}]}
+{"v":2,"service":"server/app.mjs","db":"db.json","bindings":[],"reportPages":[{"path":"/","title":"Team Expense Tracker"}]}

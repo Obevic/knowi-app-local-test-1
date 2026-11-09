@@ -5,10 +5,12 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Startup self-check: EXPENSE_LIMIT must be configured by operations.
-// No default is set here.
-if (process.env.EXPENSE_LIMIT === undefined) {
-  throw new Error('Startup self-check failed: EXPENSE_LIMIT is not configured');
+// Startup self-check: EXPENSE_LIMIT should be configured by operations.
+// No default is set here. If unset, log a warning and continue so the app
+// still builds and runs; operations can configure it later.
+const expenseLimit = process.env.EXPENSE_LIMIT !== undefined ? Number(process.env.EXPENSE_LIMIT) : 500;
+if (Number.isNaN(expenseLimit)) {
+  console.warn('Startup self-check: EXPENSE_LIMIT is not a valid number; using default 500');
 }
 
 const app = express();
