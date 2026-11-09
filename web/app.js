@@ -3,306 +3,450 @@ window.knowiReportReady = false;
 (function () {
   'use strict';
 
-  var $ = function (id) { return document.getElementById(id); };
-
-  var els = {
-    viewer: $('viewer'),
-    viewerName: $('viewer-name'),
-    viewerEmail: $('viewer-email'),
-    expenseCount: $('expense-count'),
-    addForm: $('add-form'),
-    fDate: $('f-date'),
-    fCategory: $('f-category'),
-    fAmount: $('f-amount'),
-    fNote: $('f-note'),
-    formMsg: $('form-msg'),
-    formSubmit: $('form-submit'),
-    addBtn: $('add-btn'),
-    chart: $('chart'),
-    chartEmpty: $('chart-empty'),
-    chartMonth: $('chart-month'),
-    tableWrap: $('table-wrap'),
-    expBody: $('exp-body'),
-    tableEmpty: $('table-empty'),
-    tableCount: $('table-count'),
-    categoryList: $('category-list'),
-    loading: $('loading'),
-    error: $('error'),
-    errorText: $('error-text'),
-    retryBtn: $('retry-btn'),
-    sessionExpired: $('session-expired')
-  };
-
+  var PAGE_SIZE = 50;
   var state = {
-    expenses: [],
+    tickets: [],
     categories: [],
-    monthLabel: '',
-    monthKey: ''
+    statuses: [],
+    priorities: [],
+    filterCategory: '',
+    filterStatus: '',
+    sortField: 'created',
+    sortDir: 'desc',
+    visible: PAGE_SIZE,
+    viewer: null,
+    currentTicketId: null,
+    loading: true,
+    error: null
   };
 
-  var CHART_COLORS = ['#375357', '#4E6E78', '#276B5D', '#7F5410', '#9C2F3C', '#5F4C38', '#3A5A63', '#6B4F3A'];
+  var els = {};
 
-  function todayStr() {
-    var d = new Date();
-    var m = String(d.getMonth() + 1).padStart(2, '0');
-    var day = String(d.getDate()).padStart(2, '0');
-    return d.getFullYear() + '-' + m + '-' + day;
+  function $(id) {
+    return document.getElementById(id);
   }
 
-  function monthKeyOf(dateStr) {
-    return dateStr ? dateStr.slice(0, 7) : '';
-  }
-
-  function fmtDate(dateStr) {
-    if (!dateStr) return '';
-    var parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    var d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  }
-
-  function fmtMoney(n) {
-    return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  function cacheEls() {
+    els.sidebar = $('sidebar');
+    els.kpiOpen = $('kpiOpen');
+    els.kpiProgress = $('kpiProgress');
+    els.kpiResolved = $('kpiResolved');
+    els.filterCategory = $('filterCategory');
+    els.filterStatus = $('filterStatus');
+    els.ticketBody = $('ticketBody');
+    els.tableCount = $('tableCount');
+    els.showMore = $('showMore');
+    els.detailOverlay = $('detailOverlay');
+    els.detailId = $('detailId');
+    els.detailTitle = $('detailTitle');
+    els.detailClose = $('detailClose');
+    els.detailRequester = $('detailRequester');
+    els.detailCategory = $('detailCategory');
+    els.detailPriority = $('detailPriority');
+    els.detailCreated = $('detailCreated');
+    els.detailStatus = $('detailStatus');
+    els.statusForm = $('statusForm');
+    els.statusSelect = $('statusSelect');
+    els.statusSubmit = $('statusSubmit');
+    els.formMsg = $('formMsg');
+    els.viewer = $('viewer');
+    els.viewerAvatar = $('viewerAvatar');
+    els.viewerName = $('viewerName');
+    els.viewerEmail = $('viewerEmail');
+    els.stateBlock = $('stateBlock');
+    els.stateTitle = $('stateTitle');
+    els.stateText = $('stateText');
+    els.stateAction = $('stateAction');
   }
 
   function esc(s) {
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    var m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var day = d.getDate();
+    var mon = m[d.getMonth()];
+    var yr = d.getFullYear();
+    var h = d.getHours();
+    var min = d.getMinutes();
+    var ap = h >= 12 ? 'PM' : 'AM';
+    var hh = h % 12;
+    if (hh === 0) hh = 12;
+    var mm = (min < 10 ? '0' : '') + min;
+    return day + ' ' + mon + ' ' + yr + ' · ' + hh + ':' + mm + ' ' + ap;
+  }
+
+  function statusClass(status) {
+    if (status === 'Resolved') return 'chip chip-resolved';
+    if (status === 'In progress') return 'chip chip-progress';
+    return 'chip chip-open';
+  }
+
+  function priorityClass(priority) {
+    if (priority === 'Urgent') return 'chip chip-urgent';
+    if (priority === 'High') return 'chip chip-high';
+    if (priority === 'Medium') return 'chip chip-medium';
+    return 'chip chip-low';
+  }
+
+  function initials(name) {
+    if (!name) return '?';
+    var parts = String(name).trim().split(/\s+/);
+    var a = parts[0] ? parts[0][0] : '';
+    var b = parts.length > 1 ? parts[parts.length - 1][0] : '';
+    return (a + b).toUpperCase() || '?';
+  }
+
+  function filteredTickets() {
+    return state.tickets.filter(function (t) {
+      if (state.filterCategory && t.category !== state.filterCategory) return false;
+      if (state.filterStatus && t.status !== state.filterStatus) return false;
+      return true;
     });
   }
 
-  function showLoading() {
-    els.loading.hidden = false;
-    els.error.hidden = true;
-    els.sessionExpired.hidden = true;
+  function sortedTickets(list) {
+    var f = state.sortField;
+    var dir = state.sortDir === 'asc' ? 1 : -1;
+    return list.slice().sort(function (a, b) {
+      var av, bv;
+      if (f === 'created') {
+        av = new Date(a.created).getTime();
+        bv = new Date(b.created).getTime();
+      } else if (f === 'id') {
+        av = a.id;
+        bv = b.id;
+      } else {
+        av = String(a[f] || '').toLowerCase();
+        bv = String(b[f] || '').toLowerCase();
+      }
+      if (av < bv) return -1 * dir;
+      if (av > bv) return 1 * dir;
+      return 0;
+    });
   }
 
-  function hideLoading() {
-    els.loading.hidden = true;
+  function renderKpis() {
+    var open = 0, prog = 0, resolvedToday = 0;
+    var now = Date.now();
+    var day = 24 * 60 * 60 * 1000;
+    state.tickets.forEach(function (t) {
+      if (t.status === 'Open') open++;
+      else if (t.status === 'In progress') prog++;
+      else if (t.status === 'Resolved') {
+        var ts = new Date(t.created).getTime();
+        if (now - ts <= day) resolvedToday++;
+      }
+    });
+    els.kpiOpen.textContent = open;
+    els.kpiProgress.textContent = prog;
+    els.kpiResolved.textContent = resolvedToday;
+
+    var counts = { all: state.tickets.length, open: open, inprogress: prog, resolved: 0 };
+    state.tickets.forEach(function (t) { if (t.status === 'Resolved') counts.resolved++; });
+    var pills = document.querySelectorAll('[data-count]');
+    for (var i = 0; i < pills.length; i++) {
+      var key = pills[i].getAttribute('data-count');
+      pills[i].textContent = counts[key] != null ? counts[key] : 0;
+    }
   }
 
-  function showError(msg) {
-    hideLoading();
-    els.errorText.textContent = msg || "We couldn't load your expenses.";
-    els.error.hidden = false;
+  function renderFilters() {
+    els.filterCategory.innerHTML =
+      '<option value="">All categories</option>' +
+      state.categories.map(function (c) {
+        return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
+      }).join('');
+    els.filterStatus.innerHTML =
+      '<option value="">All statuses</option>' +
+      state.statuses.map(function (s) {
+        return '<option value="' + esc(s) + '">' + esc(s) + '</option>';
+      }).join('');
+    els.filterCategory.value = state.filterCategory;
+    els.filterStatus.value = state.filterStatus;
   }
 
-  function showSessionExpired() {
-    hideLoading();
-    els.error.hidden = true;
-    els.sessionExpired.hidden = false;
+  function renderSortIndicators() {
+    var btns = document.querySelectorAll('.sort-btn');
+    for (var i = 0; i < btns.length; i++) {
+      var b = btns[i];
+      var f = b.getAttribute('data-sort');
+      var active = f === state.sortField;
+      b.classList.toggle('active', active);
+      b.setAttribute('aria-sort', active ? (state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
+      var arrow = b.querySelector('.sort-arrow');
+      if (!arrow) {
+        arrow = document.createElement('span');
+        arrow.className = 'sort-arrow';
+        arrow.setAttribute('aria-hidden', 'true');
+        b.appendChild(arrow);
+      }
+      arrow.textContent = active ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
+    }
   }
 
-  function renderViewer(v) {
-    if (v && (v.name || v.email)) {
-      els.viewerName.textContent = v.name || '';
-      els.viewerEmail.textContent = v.email || '';
+  function renderTable() {
+    var list = sortedTickets(filteredTickets());
+    var shown = list.slice(0, state.visible);
+    var html = '';
+    for (var i = 0; i < shown.length; i++) {
+      var t = shown[i];
+      html +=
+        '<tr class="ticket-row" data-id="' + t.id + '" tabindex="0" role="button" aria-label="Open ticket ' + esc(t.id) + '">' +
+        '<td class="cell-id">' + t.id + '</td>' +
+        '<td class="cell-subject">' + esc(t.subject) + '</td>' +
+        '<td class="cell-requester">' + esc(t.requester) + '</td>' +
+        '<td class="cell-category">' + esc(t.category) + '</td>' +
+        '<td class="cell-priority"><span class="' + priorityClass(t.priority) + '">' + esc(t.priority) + '</span></td>' +
+        '<td class="cell-status"><span class="' + statusClass(t.status) + '">' + esc(t.status) + '</span></td>' +
+        '<td class="cell-created">' + fmtDate(t.created) + '</td>' +
+        '</tr>';
+    }
+    if (shown.length === 0) {
+      html = '<tr class="empty-row"><td colspan="7">No tickets match the current filters.</td></tr>';
+    }
+    els.ticketBody.innerHTML = html;
+    els.tableCount.textContent = shown.length + ' of ' + list.length + ' tickets';
+    els.showMore.hidden = state.visible >= list.length;
+  }
+
+  function renderViewer() {
+    if (state.viewer && state.viewer.name) {
       els.viewer.hidden = false;
+      els.viewerAvatar.textContent = initials(state.viewer.name);
+      els.viewerName.textContent = state.viewer.name;
+      els.viewerEmail.textContent = state.viewer.email || '';
     } else {
       els.viewer.hidden = true;
     }
   }
 
-  function renderTable() {
-    var rows = state.expenses;
-    if (!rows.length) {
-      els.expBody.innerHTML = '';
-      els.tableEmpty.hidden = false;
-      els.tableWrap.querySelector('table').style.display = 'none';
-      els.tableCount.textContent = '';
-      return;
+  function showState(kind) {
+    var content = document.querySelector('.content');
+    var overlay = els.detailOverlay;
+    if (overlay) overlay.hidden = true;
+    if (content) content.hidden = true;
+    els.stateBlock.hidden = false;
+    if (kind === 'error') {
+      els.stateTitle.textContent = 'Something went wrong';
+      els.stateText.textContent = 'We could not load the ticket board. Please try again in a moment.';
+      els.stateAction.hidden = true;
+    } else {
+      els.stateTitle.textContent = 'Session expired';
+      els.stateText.textContent = 'Your sign-in has expired. Please sign in again to continue.';
+      els.stateAction.hidden = false;
     }
-    els.tableWrap.querySelector('table').style.display = '';
-    els.tableEmpty.hidden = true;
-    els.tableCount.textContent = rows.length + (rows.length === 1 ? ' expense' : ' expenses');
-
-    var html = '';
-    for (var i = 0; i < rows.length; i++) {
-      var e = rows[i];
-      html += '<tr>' +
-        '<td class="col-date">' + esc(fmtDate(e.date)) + '</td>' +
-        '<td class="col-cat"><span class="cat-chip">' + esc(e.category) + '</span></td>' +
-        '<td class="col-note">' + (e.note ? esc(e.note) : '<span class="muted">—</span>') + '</td>' +
-        '<td class="col-amt">' + esc(fmtMoney(e.amount)) + '</td>' +
-        '</tr>';
-    }
-    els.expBody.innerHTML = html;
   }
 
-  function renderChart() {
-    var mk = state.monthKey;
-    var totals = {};
-    for (var i = 0; i < state.expenses.length; i++) {
-      var e = state.expenses[i];
-      if (monthKeyOf(e.date) === mk) {
-        totals[e.category] = (totals[e.category] || 0) + e.amount;
-      }
-    }
-    var entries = Object.keys(totals).map(function (k) { return { cat: k, total: totals[k] }; });
-    entries.sort(function (a, b) { return b.total - a.total; });
-
-    els.chartMonth.textContent = state.monthLabel || '';
-
-    if (!entries.length) {
-      els.chart.innerHTML = '';
-      els.chartEmpty.hidden = false;
-      return;
-    }
-    els.chartEmpty.hidden = true;
-
-    var W = 640, H = 240, padL = 16, padR = 16, padT = 16, padB = 44;
-    var plotW = W - padL - padR;
-    var plotH = H - padT - padB;
-    var n = entries.length;
-    var gap = 14;
-    var barW = Math.min(64, (plotW - gap * (n - 1)) / n);
-    var totalW = n * barW + (n - 1) * gap;
-    var startX = padL + (plotW - totalW) / 2;
-    var maxVal = entries.reduce(function (m, e) { return Math.max(m, e.total); }, 0);
-
-    var svg = '<svg class="bar-chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Spending by category for ' + esc(state.monthLabel) + '">';
-    for (var i = 0; i < n; i++) {
-      var e = entries[i];
-      var h = maxVal > 0 ? (e.total / maxVal) * plotH : 0;
-      var x = startX + i * (barW + gap);
-      var y = padT + plotH - h;
-      var color = CHART_COLORS[i % CHART_COLORS.length];
-      svg += '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="4" fill="' + color + '"></rect>';
-      svg += '<text class="bar-val" x="' + (x + barW / 2).toFixed(1) + '" y="' + (y - 6).toFixed(1) + '" text-anchor="middle" fill="#273D44" font-size="12" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">' + esc(fmtMoney(e.total)) + '</text>';
-      svg += '<text class="bar-label" x="' + (x + barW / 2).toFixed(1) + '" y="' + (padT + plotH + 18) + '" text-anchor="middle" fill="#56666D" font-size="12" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif">' + esc(e.cat) + '</text>';
-    }
-    svg += '<line x1="' + padL + '" y1="' + (padT + plotH) + '" x2="' + (W - padR) + '" y2="' + (padT + plotH) + '" stroke="#DCE3E4" stroke-width="1"></line>';
-    svg += '</svg>';
-    els.chart.innerHTML = svg;
+  function hideState() {
+    els.stateBlock.hidden = true;
+    var content = document.querySelector('.content');
+    if (content) content.hidden = false;
   }
 
-  function renderCategories() {
-    var html = '';
-    for (var i = 0; i < state.categories.length; i++) {
-      html += '<option value="' + esc(state.categories[i]) + '">';
-    }
-    els.categoryList.innerHTML = html;
+  function openDetail(id) {
+    var t = state.tickets.find(function (x) { return x.id === id; });
+    if (!t) return;
+    state.currentTicketId = id;
+    els.detailId.textContent = 'Ticket #' + t.id;
+    els.detailTitle.textContent = t.subject;
+    els.detailRequester.textContent = t.requester;
+    els.detailCategory.textContent = t.category;
+    els.detailPriority.textContent = t.priority;
+    els.detailCreated.textContent = fmtDate(t.created);
+    els.detailStatus.innerHTML = '<span class="' + statusClass(t.status) + '">' + esc(t.status) + '</span>';
+
+    els.statusSelect.innerHTML = state.statuses.map(function (s) {
+      return '<option value="' + esc(s) + '"' + (s === t.status ? ' selected' : '') + '>' + esc(s) + '</option>';
+    }).join('');
+    els.formMsg.textContent = '';
+    els.statusSubmit.disabled = false;
+    els.detailOverlay.hidden = false;
+    document.body.classList.add('no-scroll');
+    els.detailClose.focus();
   }
 
-  function renderAll() {
-    els.expenseCount.textContent = state.expenses.length;
+  function closeDetail() {
+    els.detailOverlay.hidden = true;
+    document.body.classList.remove('no-scroll');
+    state.currentTicketId = null;
+  }
+
+  function refreshAfterStatusChange(ticket) {
+    var idx = state.tickets.findIndex(function (x) { return x.id === ticket.id; });
+    if (idx >= 0) state.tickets[idx] = ticket;
+    renderKpis();
     renderTable();
-    renderChart();
-    renderCategories();
-    hideLoading();
-    window.knowiReportReady = true;
+    if (state.currentTicketId === ticket.id) {
+      els.detailStatus.innerHTML = '<span class="' + statusClass(ticket.status) + '">' + esc(ticket.status) + '</span>';
+      els.statusSelect.value = ticket.status;
+    }
   }
 
-  function loadData() {
-    showLoading();
-    return fetch('api/expenses', { headers: { Accept: 'application/json' } })
-      .then(function (r) {
-        if (r.status === 401) { showSessionExpired(); throw new Error('unauthorized'); }
-        if (!r.ok) throw new Error('http ' + r.status);
+  function setNavActive(key) {
+    var links = document.querySelectorAll('.nav-link');
+    for (var i = 0; i < links.length; i++) {
+      links[i].classList.toggle('active', links[i].getAttribute('data-nav') === key);
+    }
+  }
+
+  function bindEvents() {
+    els.filterCategory.addEventListener('change', function () {
+      state.filterCategory = els.filterCategory.value;
+      state.visible = PAGE_SIZE;
+      renderTable();
+    });
+    els.filterStatus.addEventListener('change', function () {
+      state.filterStatus = els.filterStatus.value;
+      state.visible = PAGE_SIZE;
+      renderTable();
+    });
+
+    els.showMore.addEventListener('click', function () {
+      state.visible += PAGE_SIZE;
+      renderTable();
+    });
+
+    var sortBtns = document.querySelectorAll('.sort-btn');
+    for (var i = 0; i < sortBtns.length; i++) {
+      sortBtns[i].addEventListener('click', function () {
+        var f = this.getAttribute('data-sort');
+        if (state.sortField === f) {
+          state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+          state.sortField = f;
+          state.sortDir = 'asc';
+        }
+        renderSortIndicators();
+        renderTable();
+      });
+    }
+
+    els.ticketBody.addEventListener('click', function (e) {
+      var row = e.target.closest('.ticket-row');
+      if (row) openDetail(Number(row.getAttribute('data-id')));
+    });
+    els.ticketBody.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ' ') {
+        var row = e.target.closest('.ticket-row');
+        if (row) {
+          e.preventDefault();
+          openDetail(Number(row.getAttribute('data-id')));
+        }
+      }
+    });
+
+    els.detailClose.addEventListener('click', closeDetail);
+    els.detailOverlay.addEventListener('click', function (e) {
+      if (e.target === els.detailOverlay) closeDetail();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !els.detailOverlay.hidden) closeDetail();
+    });
+
+    els.statusForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (state.currentTicketId == null) return;
+      var newStatus = els.statusSelect.value;
+      els.statusSubmit.disabled = true;
+      els.formMsg.textContent = 'Saving…';
+      fetch('api/tickets/' + state.currentTicketId + '/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus })
+      })
+        .then(function (r) {
+          return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+        })
+        .then(function (res) {
+          els.statusSubmit.disabled = false;
+          if (res.ok) {
+            els.formMsg.textContent = 'Status updated.';
+            refreshAfterStatusChange(res.data.ticket);
+          } else {
+            els.formMsg.textContent = res.data.error || 'Could not update status.';
+          }
+        })
+        .catch(function () {
+          els.statusSubmit.disabled = false;
+          els.formMsg.textContent = 'Network error. Please try again.';
+        });
+    });
+
+    var navLinks = document.querySelectorAll('.nav-link');
+    for (var n = 0; n < navLinks.length; n++) {
+      navLinks[n].addEventListener('click', function (e) {
+        e.preventDefault();
+        var key = this.getAttribute('data-nav');
+        setNavActive(key);
+        if (key === 'all') {
+          state.filterStatus = '';
+        } else if (key === 'open') {
+          state.filterStatus = 'Open';
+        } else if (key === 'inprogress') {
+          state.filterStatus = 'In progress';
+        } else if (key === 'resolved') {
+          state.filterStatus = 'Resolved';
+        }
+        els.filterStatus.value = state.filterStatus;
+        state.visible = PAGE_SIZE;
+        renderTable();
+      });
+    }
+  }
+
+  function load() {
+    Promise.all([
+      fetch('api/me').then(function (r) {
+        if (r.status === 401) throw { status: 401 };
+        return r.json();
+      }),
+      fetch('api/tickets').then(function (r) {
+        if (r.status === 401) throw { status: 401 };
+        if (!r.ok) throw { status: r.status };
         return r.json();
       })
-      .then(function (data) {
-        state.expenses = data.expenses || [];
+    ])
+      .then(function (results) {
+        state.viewer = results[0] || null;
+        var data = results[1];
+        state.tickets = data.tickets || [];
         state.categories = data.categories || [];
-        state.monthLabel = data.monthLabel || '';
-        state.monthKey = state.expenses.length ? monthKeyOf(state.expenses[0].date) : monthKeyOf(todayStr());
-        renderAll();
+        state.statuses = data.statuses || [];
+        state.priorities = data.priorities || [];
+        state.loading = false;
+        hideState();
+        renderViewer();
+        renderKpis();
+        renderFilters();
+        renderSortIndicators();
+        renderTable();
+        window.knowiReportReady = true;
       })
       .catch(function (err) {
-        if (err && err.message === 'unauthorized') return;
-        showError('We couldn\'t load your expenses. Please try again.');
-      });
-  }
-
-  function loadViewer() {
-    return fetch('api/me', { headers: { Accept: 'application/json' } })
-      .then(function (r) {
-        if (r.status === 401) { showSessionExpired(); throw new Error('unauthorized'); }
-        if (!r.ok) throw new Error('http ' + r.status);
-        return r.json();
-      })
-      .then(function (v) { renderViewer(v); })
-      .catch(function (err) {
-        if (err && err.message === 'unauthorized') return;
-        renderViewer(null);
-      });
-  }
-
-  function setFormMsg(msg, kind) {
-    els.formMsg.textContent = msg || '';
-    els.formMsg.className = 'form-msg' + (kind ? ' ' + kind : '');
-  }
-
-  function handleAdd(e) {
-    e.preventDefault();
-    var date = els.fDate.value;
-    var category = els.fCategory.value.trim();
-    var amount = els.fAmount.value;
-    var note = els.fNote.value.trim();
-
-    if (!date || !category || amount === '') {
-      setFormMsg('Please fill in date, category and amount.', 'err');
-      return;
-    }
-    var amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
-      setFormMsg('Amount must be a positive number.', 'err');
-      return;
-    }
-
-    els.formSubmit.disabled = true;
-    setFormMsg('Saving…', '');
-    fetch('api/expenses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ date: date, category: category, amount: amt, note: note })
-    })
-      .then(function (r) {
-        if (r.status === 401) { showSessionExpired(); throw new Error('unauthorized'); }
-        if (!r.ok) {
-          return r.json().then(function (j) { throw new Error(j && j.error ? j.error : 'Could not save expense.'); }, function () { throw new Error('Could not save expense.'); });
+        state.loading = false;
+        if (err && err.status === 401) {
+          showState('expired');
+        } else {
+          showState('error');
         }
-        return r.json();
-      })
-      .then(function (data) {
-        if (data && data.expense) {
-          state.expenses.unshift(data.expense);
-          if (state.categories.indexOf(data.expense.category) === -1) {
-            state.categories.push(data.expense.category);
-            state.categories.sort();
-          }
-          var latestKey = monthKeyOf(data.expense.date);
-          if (latestKey > state.monthKey) {
-            state.monthKey = latestKey;
-            state.monthLabel = new Date(data.expense.date + 'T00:00:00').toLocaleString('en-US', { month: 'long', year: 'numeric' });
-          }
-          renderAll();
-          setFormMsg('Expense saved.', 'ok');
-          els.addForm.reset();
-          els.fDate.value = todayStr();
-          setTimeout(function () { setFormMsg('', ''); }, 2500);
-        }
-      })
-      .catch(function (err) {
-        if (err && err.message === 'unauthorized') return;
-        setFormMsg(err.message || 'Could not save expense.', 'err');
-      })
-      .then(function () { els.formSubmit.disabled = false; });
+        window.knowiReportReady = true;
+      });
   }
 
   function init() {
-    els.fDate.value = todayStr();
-    els.addForm.addEventListener('submit', handleAdd);
-    els.retryBtn.addEventListener('click', function () { loadData(); });
-    els.addBtn.addEventListener('click', function () {
-      var card = document.getElementById('add-card');
-      if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      setTimeout(function () { els.fDate.focus(); }, 300);
-    });
-
-    loadViewer();
-    loadData();
+    cacheEls();
+    bindEvents();
+    load();
   }
 
   if (document.readyState === 'loading') {
