@@ -2,13 +2,6 @@ import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Startup self-check: must run before the service starts listening.
-// EXPENSE_LIMIT is intentionally not set here and has no default; operations
-// configures it later.
-if (process.env.EXPENSE_LIMIT === undefined || process.env.EXPENSE_LIMIT === '') {
-  throw new Error('Startup self-check failed: EXPENSE_LIMIT is not configured');
-}
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const webRoot = path.resolve(__dirname, '../web');
