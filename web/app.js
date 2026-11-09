@@ -5,19 +5,20 @@ window.knowiReportReady = false;
 
   var PAGE_SIZE = 50;
   var state = {
-    tickets: [],
-    categories: [],
-    statuses: [],
-    priorities: [],
-    filterCategory: '',
-    filterStatus: '',
-    sortField: 'created',
-    sortDir: 'desc',
+    expenses: [],
     visible: PAGE_SIZE,
-    viewer: null,
-    currentTicketId: null,
+    categories: [],
+    monthKey: null,
+    monthLabel: '',
+    monthTotals: {},
+    monthMax: 0,
+    monthTotal: 0,
+    monthCount: 0,
+    monthHasData: false,
     loading: true,
-    error: null
+    error: null,
+    sessionExpired: false,
+    viewer: null
   };
 
   var els = {};
@@ -27,202 +28,100 @@ window.knowiReportReady = false;
   }
 
   function cacheEls() {
-    els.sidebar = $('sidebar');
-    els.kpiOpen = $('kpiOpen');
-    els.kpiProgress = $('kpiProgress');
-    els.kpiResolved = $('kpiResolved');
-    els.filterCategory = $('filterCategory');
-    els.filterStatus = $('filterStatus');
-    els.ticketBody = $('ticketBody');
-    els.tableCount = $('tableCount');
-    els.showMore = $('showMore');
-    els.detailOverlay = $('detailOverlay');
-    els.detailId = $('detailId');
-    els.detailTitle = $('detailTitle');
-    els.detailClose = $('detailClose');
-    els.detailRequester = $('detailRequester');
-    els.detailCategory = $('detailCategory');
-    els.detailPriority = $('detailPriority');
-    els.detailCreated = $('detailCreated');
-    els.detailStatus = $('detailStatus');
-    els.statusForm = $('statusForm');
-    els.statusSelect = $('statusSelect');
-    els.statusSubmit = $('statusSubmit');
-    els.formMsg = $('formMsg');
+    els.status = $('status');
+    els.countPill = $('count-pill');
     els.viewer = $('viewer');
-    els.viewerAvatar = $('viewerAvatar');
-    els.viewerName = $('viewerName');
-    els.viewerEmail = $('viewerEmail');
-    els.stateBlock = $('stateBlock');
-    els.stateTitle = $('stateTitle');
-    els.stateText = $('stateText');
-    els.stateAction = $('stateAction');
-  }
-
-  function esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    els.viewerName = $('viewer-name');
+    els.viewerEmail = $('viewer-email');
+    els.addForm = $('add-form');
+    els.addSubmit = $('add-submit');
+    els.fDate = $('f-date');
+    els.fCategory = $('f-category');
+    els.fAmount = $('f-amount');
+    els.fNote = $('f-note');
+    els.categoryList = $('category-list');
+    els.expensesBody = $('expenses-body');
+    els.showMore = $('show-more');
+    els.chart = $('chart');
+    els.monthLabel = $('month-label');
   }
 
   function fmtDate(iso) {
-    if (!iso) return '—';
-    var d = new Date(iso);
-    if (isNaN(d.getTime())) return '—';
-    var m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var day = d.getDate();
-    var mon = m[d.getMonth()];
-    var yr = d.getFullYear();
-    var h = d.getHours();
-    var min = d.getMinutes();
-    var ap = h >= 12 ? 'PM' : 'AM';
-    var hh = h % 12;
-    if (hh === 0) hh = 12;
-    var mm = (min < 10 ? '0' : '') + min;
-    return day + ' ' + mon + ' ' + yr + ' · ' + hh + ':' + mm + ' ' + ap;
+    if (!iso) return '';
+    var parts = String(iso).split('-');
+    if (parts.length < 3) return iso;
+    var y = parts[0];
+    var m = parts[1];
+    var d = parts[2];
+    return y + '-' + m + '-' + d;
   }
 
-  function statusClass(status) {
-    if (status === 'Resolved') return 'chip chip-resolved';
-    if (status === 'In progress') return 'chip chip-progress';
-    return 'chip chip-open';
+  function fmtMoney(n) {
+    var v = Number(n);
+    if (!isFinite(v)) return '0.00';
+    return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
-  function priorityClass(priority) {
-    if (priority === 'Urgent') return 'chip chip-urgent';
-    if (priority === 'High') return 'chip chip-high';
-    if (priority === 'Medium') return 'chip chip-medium';
-    return 'chip chip-low';
+  function monthKeyOf(iso) {
+    if (!iso) return '';
+    var parts = String(iso).split('-');
+    if (parts.length < 2) return '';
+    return parts[0] + '-' + parts[1];
   }
 
-  function initials(name) {
-    if (!name) return '?';
-    var parts = String(name).trim().split(/\s+/);
-    var a = parts[0] ? parts[0][0] : '';
-    var b = parts.length > 1 ? parts[parts.length - 1][0] : '';
-    return (a + b).toUpperCase() || '?';
+  function monthLabelFromKey(key) {
+    if (!key) return '';
+    var parts = key.split('-');
+    var y = parseInt(parts[0], 10);
+    var m = parseInt(parts[1], 10);
+    if (!y || !m) return key;
+    var d = new Date(y, m - 1, 1);
+    return d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
   }
 
-  function filteredTickets() {
-    return state.tickets.filter(function (t) {
-      if (state.filterCategory && t.category !== state.filterCategory) return false;
-      if (state.filterStatus && t.status !== state.filterStatus) return false;
-      return true;
-    });
+  function latestDate() {
+    var latest = '';
+    for (var i = 0; i < state.expenses.length; i++) {
+      var d = state.expenses[i].date;
+      if (d && d > latest) latest = d;
+    }
+    return latest;
   }
 
-  function sortedTickets(list) {
-    var f = state.sortField;
-    var dir = state.sortDir === 'asc' ? 1 : -1;
-    return list.slice().sort(function (a, b) {
-      var av, bv;
-      if (f === 'created') {
-        av = new Date(a.created).getTime();
-        bv = new Date(b.created).getTime();
-      } else if (f === 'id') {
-        av = a.id;
-        bv = b.id;
-      } else {
-        av = String(a[f] || '').toLowerCase();
-        bv = String(b[f] || '').toLowerCase();
+  function computeDerived() {
+    var catSet = {};
+    var latest = latestDate();
+    var mk = monthKeyOf(latest);
+    state.monthKey = mk;
+    state.monthLabel = monthLabelFromKey(mk);
+    var totals = {};
+    var max = 0;
+    var total = 0;
+    var count = 0;
+    for (var i = 0; i < state.expenses.length; i++) {
+      var e = state.expenses[i];
+      if (e.category) catSet[e.category] = true;
+      if (mk && monthKeyOf(e.date) === mk) {
+        var amt = Number(e.amount) || 0;
+        totals[e.category] = (totals[e.category] || 0) + amt;
+        if (totals[e.category] > max) max = totals[e.category];
+        total += amt;
+        count++;
       }
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
-      return 0;
+    }
+    state.categories = Object.keys(catSet).sort(function (a, b) {
+      return a < b ? -1 : a > b ? 1 : 0;
     });
-  }
-
-  function renderKpis() {
-    var open = 0, prog = 0, resolvedToday = 0;
-    var now = Date.now();
-    var day = 24 * 60 * 60 * 1000;
-    state.tickets.forEach(function (t) {
-      if (t.status === 'Open') open++;
-      else if (t.status === 'In progress') prog++;
-      else if (t.status === 'Resolved') {
-        var ts = new Date(t.created).getTime();
-        if (now - ts <= day) resolvedToday++;
-      }
-    });
-    els.kpiOpen.textContent = open;
-    els.kpiProgress.textContent = prog;
-    els.kpiResolved.textContent = resolvedToday;
-
-    var counts = { all: state.tickets.length, open: open, inprogress: prog, resolved: 0 };
-    state.tickets.forEach(function (t) { if (t.status === 'Resolved') counts.resolved++; });
-    var pills = document.querySelectorAll('[data-count]');
-    for (var i = 0; i < pills.length; i++) {
-      var key = pills[i].getAttribute('data-count');
-      pills[i].textContent = counts[key] != null ? counts[key] : 0;
-    }
-  }
-
-  function renderFilters() {
-    els.filterCategory.innerHTML =
-      '<option value="">All categories</option>' +
-      state.categories.map(function (c) {
-        return '<option value="' + esc(c) + '">' + esc(c) + '</option>';
-      }).join('');
-    els.filterStatus.innerHTML =
-      '<option value="">All statuses</option>' +
-      state.statuses.map(function (s) {
-        return '<option value="' + esc(s) + '">' + esc(s) + '</option>';
-      }).join('');
-    els.filterCategory.value = state.filterCategory;
-    els.filterStatus.value = state.filterStatus;
-  }
-
-  function renderSortIndicators() {
-    var btns = document.querySelectorAll('.sort-btn');
-    for (var i = 0; i < btns.length; i++) {
-      var b = btns[i];
-      var f = b.getAttribute('data-sort');
-      var active = f === state.sortField;
-      b.classList.toggle('active', active);
-      b.setAttribute('aria-sort', active ? (state.sortDir === 'asc' ? 'ascending' : 'descending') : 'none');
-      var arrow = b.querySelector('.sort-arrow');
-      if (!arrow) {
-        arrow = document.createElement('span');
-        arrow.className = 'sort-arrow';
-        arrow.setAttribute('aria-hidden', 'true');
-        b.appendChild(arrow);
-      }
-      arrow.textContent = active ? (state.sortDir === 'asc' ? '▲' : '▼') : '';
-    }
-  }
-
-  function renderTable() {
-    var list = sortedTickets(filteredTickets());
-    var shown = list.slice(0, state.visible);
-    var html = '';
-    for (var i = 0; i < shown.length; i++) {
-      var t = shown[i];
-      html +=
-        '<tr class="ticket-row" data-id="' + t.id + '" tabindex="0" role="button" aria-label="Open ticket ' + esc(t.id) + '">' +
-        '<td class="cell-id">' + t.id + '</td>' +
-        '<td class="cell-subject">' + esc(t.subject) + '</td>' +
-        '<td class="cell-requester">' + esc(t.requester) + '</td>' +
-        '<td class="cell-category">' + esc(t.category) + '</td>' +
-        '<td class="cell-priority"><span class="' + priorityClass(t.priority) + '">' + esc(t.priority) + '</span></td>' +
-        '<td class="cell-status"><span class="' + statusClass(t.status) + '">' + esc(t.status) + '</span></td>' +
-        '<td class="cell-created">' + fmtDate(t.created) + '</td>' +
-        '</tr>';
-    }
-    if (shown.length === 0) {
-      html = '<tr class="empty-row"><td colspan="7">No tickets match the current filters.</td></tr>';
-    }
-    els.ticketBody.innerHTML = html;
-    els.tableCount.textContent = shown.length + ' of ' + list.length + ' tickets';
-    els.showMore.hidden = state.visible >= list.length;
+    state.monthTotals = totals;
+    state.monthMax = max;
+    state.monthTotal = total;
+    state.monthCount = count;
+    state.monthHasData = count > 0;
   }
 
   function renderViewer() {
     if (state.viewer && state.viewer.name) {
       els.viewer.hidden = false;
-      els.viewerAvatar.textContent = initials(state.viewer.name);
       els.viewerName.textContent = state.viewer.name;
       els.viewerEmail.textContent = state.viewer.email || '';
     } else {
@@ -230,223 +129,315 @@ window.knowiReportReady = false;
     }
   }
 
-  function showState(kind) {
-    var content = document.querySelector('.content');
-    var overlay = els.detailOverlay;
-    if (overlay) overlay.hidden = true;
-    if (content) content.hidden = true;
-    els.stateBlock.hidden = false;
-    if (kind === 'error') {
-      els.stateTitle.textContent = 'Something went wrong';
-      els.stateText.textContent = 'We could not load the ticket board. Please try again in a moment.';
-      els.stateAction.hidden = true;
-    } else {
-      els.stateTitle.textContent = 'Session expired';
-      els.stateText.textContent = 'Your sign-in has expired. Please sign in again to continue.';
-      els.stateAction.hidden = false;
+  function renderStatus() {
+    if (state.sessionExpired) {
+      els.status.hidden = false;
+      els.status.className = 'status status-error';
+      els.status.innerHTML =
+        'Your session has expired. <a class="link" href="login">Sign in again</a> to continue.';
+      return;
     }
+    if (state.error) {
+      els.status.hidden = false;
+      els.status.className = 'status status-error';
+      els.status.textContent = state.error;
+      return;
+    }
+    if (state.loading) {
+      els.status.hidden = false;
+      els.status.className = 'status status-loading';
+      els.status.textContent = 'Loading expenses…';
+      return;
+    }
+    els.status.hidden = true;
+    els.status.textContent = '';
   }
 
-  function hideState() {
-    els.stateBlock.hidden = true;
-    var content = document.querySelector('.content');
-    if (content) content.hidden = false;
+  function renderCount() {
+    els.countPill.textContent = String(state.expenses.length);
   }
 
-  function openDetail(id) {
-    var t = state.tickets.find(function (x) { return x.id === id; });
-    if (!t) return;
-    state.currentTicketId = id;
-    els.detailId.textContent = 'Ticket #' + t.id;
-    els.detailTitle.textContent = t.subject;
-    els.detailRequester.textContent = t.requester;
-    els.detailCategory.textContent = t.category;
-    els.detailPriority.textContent = t.priority;
-    els.detailCreated.textContent = fmtDate(t.created);
-    els.detailStatus.innerHTML = '<span class="' + statusClass(t.status) + '">' + esc(t.status) + '</span>';
-
-    els.statusSelect.innerHTML = state.statuses.map(function (s) {
-      return '<option value="' + esc(s) + '"' + (s === t.status ? ' selected' : '') + '>' + esc(s) + '</option>';
+  function renderForm() {
+    var opts = state.categories.map(function (c) {
+      return '<option value="' + escapeAttr(c) + '"></option>';
     }).join('');
-    els.formMsg.textContent = '';
-    els.statusSubmit.disabled = false;
-    els.detailOverlay.hidden = false;
-    document.body.classList.add('no-scroll');
-    els.detailClose.focus();
+    els.categoryList.innerHTML = opts;
+    if (!els.fDate.value) {
+      var today = new Date();
+      var y = today.getFullYear();
+      var m = String(today.getMonth() + 1).padStart(2, '0');
+      var d = String(today.getDate()).padStart(2, '0');
+      els.fDate.value = y + '-' + m + '-' + d;
+    }
   }
 
-  function closeDetail() {
-    els.detailOverlay.hidden = true;
-    document.body.classList.remove('no-scroll');
-    state.currentTicketId = null;
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+  function escapeAttr(s) {
+    return escapeHtml(s);
   }
 
-  function refreshAfterStatusChange(ticket) {
-    var idx = state.tickets.findIndex(function (x) { return x.id === ticket.id; });
-    if (idx >= 0) state.tickets[idx] = ticket;
-    renderKpis();
+  function renderTable() {
+    var rows = state.expenses.slice(0, state.visible);
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var e = rows[i];
+      html +=
+        '<tr>' +
+        '<td class="col-date">' + escapeHtml(fmtDate(e.date)) + '</td>' +
+        '<td class="col-cat"><span class="cat-name">' + escapeHtml(e.category) + '</span></td>' +
+        '<td class="col-amt num">$' + escapeHtml(fmtMoney(e.amount)) + '</td>' +
+        '<td class="col-note">' + escapeHtml(e.note || '') + '</td>' +
+        '</tr>';
+    }
+    if (rows.length === 0) {
+      html = '<tr class="row-empty"><td colspan="4">No expenses yet. Add one above.</td></tr>';
+    }
+    els.expensesBody.innerHTML = html;
+    els.showMore.hidden = state.expenses.length <= state.visible;
+  }
+
+  function renderChart() {
+    if (!state.monthHasData) {
+      els.chart.innerHTML =
+        '<div class="chart-empty">No expenses recorded for ' +
+        escapeHtml(state.monthLabel || 'this month') + ' yet.</div>';
+      els.monthLabel.textContent = state.monthLabel || '';
+      return;
+    }
+    els.monthLabel.textContent = state.monthLabel;
+
+    var entries = Object.keys(state.monthTotals).map(function (c) {
+      return { cat: c, total: state.monthTotals[c] };
+    }).sort(function (a, b) {
+      return b.total - a.total;
+    });
+
+    var W = 640;
+    var H = 300;
+    var padL = 56;
+    var padR = 20;
+    var padT = 20;
+    var padB = 64;
+    var plotW = W - padL - padR;
+    var plotH = H - padT - padB;
+    var n = entries.length;
+    var gap = 14;
+    var barW = Math.min(64, (plotW - gap * (n + 1)) / n);
+    var totalBars = n * barW + (n + 1) * gap;
+    var startX = padL + (plotW - totalBars) / 2 + gap;
+
+    var maxVal = state.monthMax;
+    var niceMax = niceCeil(maxVal);
+    var ticks = 4;
+
+    var svg = [];
+    svg.push('<svg class="bar-chart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Bar chart of total spend per category for ' + escapeAttr(state.monthLabel) + '">');
+    svg.push('<title>Total spend per category for ' + escapeHtml(state.monthLabel) + '</title>');
+
+    // gridlines + y labels
+    for (var t = 0; t <= ticks; t++) {
+      var val = (niceMax / ticks) * t;
+      var y = padT + plotH - (val / niceMax) * plotH;
+      svg.push('<line class="grid" x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '"></line>');
+      svg.push('<text class="axis-label" x="' + (padL - 8) + '" y="' + (y + 4) + '" text-anchor="end">$' + escapeHtml(fmtMoney(val)) + '</text>');
+    }
+
+    // bars
+    for (var i = 0; i < n; i++) {
+      var e = entries[i];
+      var h = (e.total / niceMax) * plotH;
+      var x = startX + i * (barW + gap);
+      var y = padT + plotH - h;
+      svg.push('<rect class="bar" x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="3"></rect>');
+      // value label above bar
+      svg.push('<text class="bar-value" x="' + (x + barW / 2) + '" y="' + (y - 6) + '" text-anchor="middle">$' + escapeHtml(fmtMoney(e.total)) + '</text>');
+      // category label below axis
+      var labelY = padT + plotH + 18;
+      var label = e.cat;
+      if (label.length > 12) label = label.slice(0, 11) + '…';
+      svg.push('<text class="cat-label" x="' + (x + barW / 2) + '" y="' + labelY + '" text-anchor="middle">' + escapeHtml(label) + '</text>');
+    }
+
+    // baseline
+    svg.push('<line class="axis" x1="' + padL + '" y1="' + (padT + plotH) + '" x2="' + (W - padR) + '" y2="' + (padT + plotH) + '"></line>');
+
+    svg.push('</svg>');
+    els.chart.innerHTML = svg.join('');
+  }
+
+  function niceCeil(v) {
+    if (v <= 0) return 10;
+    var mag = Math.pow(10, Math.floor(Math.log10(v)));
+    var norm = v / mag;
+    var nice;
+    if (norm <= 1) nice = 1;
+    else if (norm <= 2) nice = 2;
+    else if (norm <= 2.5) nice = 2.5;
+    else if (norm <= 5) nice = 5;
+    else nice = 10;
+    return nice * mag;
+  }
+
+  function renderAll() {
+    renderViewer();
+    renderStatus();
+    renderCount();
+    renderForm();
     renderTable();
-    if (state.currentTicketId === ticket.id) {
-      els.detailStatus.innerHTML = '<span class="' + statusClass(ticket.status) + '">' + esc(ticket.status) + '</span>';
-      els.statusSelect.value = ticket.status;
-    }
+    renderChart();
   }
 
-  function setNavActive(key) {
-    var links = document.querySelectorAll('.nav-link');
-    for (var i = 0; i < links.length; i++) {
-      links[i].classList.toggle('active', links[i].getAttribute('data-nav') === key);
-    }
+  function showSessionExpired() {
+    state.sessionExpired = true;
+    state.loading = false;
+    renderAll();
   }
 
-  function bindEvents() {
-    els.filterCategory.addEventListener('change', function () {
-      state.filterCategory = els.filterCategory.value;
-      state.visible = PAGE_SIZE;
-      renderTable();
-    });
-    els.filterStatus.addEventListener('change', function () {
-      state.filterStatus = els.filterStatus.value;
-      state.visible = PAGE_SIZE;
-      renderTable();
-    });
-
-    els.showMore.addEventListener('click', function () {
-      state.visible += PAGE_SIZE;
-      renderTable();
-    });
-
-    var sortBtns = document.querySelectorAll('.sort-btn');
-    for (var i = 0; i < sortBtns.length; i++) {
-      sortBtns[i].addEventListener('click', function () {
-        var f = this.getAttribute('data-sort');
-        if (state.sortField === f) {
-          state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
-        } else {
-          state.sortField = f;
-          state.sortDir = 'asc';
-        }
-        renderSortIndicators();
-        renderTable();
-      });
-    }
-
-    els.ticketBody.addEventListener('click', function (e) {
-      var row = e.target.closest('.ticket-row');
-      if (row) openDetail(Number(row.getAttribute('data-id')));
-    });
-    els.ticketBody.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter' || e.key === ' ') {
-        var row = e.target.closest('.ticket-row');
-        if (row) {
-          e.preventDefault();
-          openDetail(Number(row.getAttribute('data-id')));
-        }
+  function fetchJson(url, opts) {
+    return fetch(url, opts).then(function (res) {
+      if (res.status === 401) {
+        var err = new Error('unauthorized');
+        err.status = 401;
+        throw err;
       }
-    });
-
-    els.detailClose.addEventListener('click', closeDetail);
-    els.detailOverlay.addEventListener('click', function (e) {
-      if (e.target === els.detailOverlay) closeDetail();
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && !els.detailOverlay.hidden) closeDetail();
-    });
-
-    els.statusForm.addEventListener('submit', function (e) {
-      e.preventDefault();
-      if (state.currentTicketId == null) return;
-      var newStatus = els.statusSelect.value;
-      els.statusSubmit.disabled = true;
-      els.formMsg.textContent = 'Saving…';
-      fetch('api/tickets/' + state.currentTicketId + '/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      })
-        .then(function (r) {
-          return r.json().then(function (data) { return { ok: r.ok, data: data }; });
-        })
-        .then(function (res) {
-          els.statusSubmit.disabled = false;
-          if (res.ok) {
-            els.formMsg.textContent = 'Status updated.';
-            refreshAfterStatusChange(res.data.ticket);
-          } else {
-            els.formMsg.textContent = res.data.error || 'Could not update status.';
-          }
-        })
-        .catch(function () {
-          els.statusSubmit.disabled = false;
-          els.formMsg.textContent = 'Network error. Please try again.';
-        });
-    });
-
-    var navLinks = document.querySelectorAll('.nav-link');
-    for (var n = 0; n < navLinks.length; n++) {
-      navLinks[n].addEventListener('click', function (e) {
-        e.preventDefault();
-        var key = this.getAttribute('data-nav');
-        setNavActive(key);
-        if (key === 'all') {
-          state.filterStatus = '';
-        } else if (key === 'open') {
-          state.filterStatus = 'Open';
-        } else if (key === 'inprogress') {
-          state.filterStatus = 'In progress';
-        } else if (key === 'resolved') {
-          state.filterStatus = 'Resolved';
+      return res.json().then(function (data) {
+        if (!res.ok) {
+          var e = new Error((data && data.error) || 'Request failed');
+          e.status = res.status;
+          throw e;
         }
-        els.filterStatus.value = state.filterStatus;
-        state.visible = PAGE_SIZE;
-        renderTable();
+        return data;
       });
-    }
+    });
   }
 
-  function load() {
-    Promise.all([
-      fetch('api/me').then(function (r) {
-        if (r.status === 401) throw { status: 401 };
-        return r.json();
-      }),
-      fetch('api/tickets').then(function (r) {
-        if (r.status === 401) throw { status: 401 };
-        if (!r.ok) throw { status: r.status };
-        return r.json();
+  function loadViewer() {
+    return fetchJson('api/me')
+      .then(function (data) {
+        state.viewer = { name: data.name, email: data.email };
       })
-    ])
-      .then(function (results) {
-        state.viewer = results[0] || null;
-        var data = results[1];
-        state.tickets = data.tickets || [];
-        state.categories = data.categories || [];
-        state.statuses = data.statuses || [];
-        state.priorities = data.priorities || [];
+      .catch(function (err) {
+        if (err.status === 401) {
+          showSessionExpired();
+          throw err;
+        }
+        state.viewer = null;
+      });
+  }
+
+  function loadExpenses() {
+    return fetchJson('api/expenses')
+      .then(function (data) {
+        state.expenses = (data && data.expenses) || [];
+        state.expenses.sort(function (a, b) {
+          if (a.date === b.date) return 0;
+          return a.date < b.date ? 1 : -1;
+        });
         state.loading = false;
-        hideState();
-        renderViewer();
-        renderKpis();
-        renderFilters();
-        renderSortIndicators();
-        renderTable();
+        state.error = null;
+        computeDerived();
+        renderAll();
         window.knowiReportReady = true;
       })
       .catch(function (err) {
-        state.loading = false;
-        if (err && err.status === 401) {
-          showState('expired');
-        } else {
-          showState('error');
+        if (err.status === 401) {
+          showSessionExpired();
+          return;
         }
+        state.loading = false;
+        state.error = 'Could not load expenses. Please try again.';
+        renderAll();
         window.knowiReportReady = true;
       });
+  }
+
+  function onAddSubmit(ev) {
+    ev.preventDefault();
+    if (state.sessionExpired) return;
+    var date = els.fDate.value;
+    var category = els.fCategory.value.trim();
+    var amount = els.fAmount.value;
+    var note = els.fNote.value.trim();
+
+    if (!date || !category || amount === '') {
+      els.status.hidden = false;
+      els.status.className = 'status status-error';
+      els.status.textContent = 'Please fill in date, category and amount.';
+      return;
+    }
+    var amtNum = Number(amount);
+    if (!isFinite(amtNum) || amtNum < 0) {
+      els.status.hidden = false;
+      els.status.className = 'status status-error';
+      els.status.textContent = 'Amount must be a non-negative number.';
+      return;
+    }
+
+    els.addSubmit.disabled = true;
+    fetchJson('api/expenses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date: date, category: category, amount: amtNum, note: note })
+    })
+      .then(function (data) {
+        var e = data.expense;
+        state.expenses.unshift(e);
+        state.expenses.sort(function (a, b) {
+          if (a.date === b.date) return 0;
+          return a.date < b.date ? 1 : -1;
+        });
+        computeDerived();
+        els.addForm.reset();
+        renderForm();
+        renderAll();
+        els.status.hidden = false;
+        els.status.className = 'status status-success';
+        els.status.textContent = 'Expense added.';
+        setTimeout(function () {
+          if (!els.status.hidden && els.status.className.indexOf('success') !== -1) {
+            els.status.hidden = true;
+          }
+        }, 2500);
+      })
+      .catch(function (err) {
+        if (err.status === 401) {
+          showSessionExpired();
+          return;
+        }
+        els.status.hidden = false;
+        els.status.className = 'status status-error';
+        els.status.textContent = (err && err.message) || 'Could not add expense.';
+      })
+      .finally(function () {
+        els.addSubmit.disabled = false;
+      });
+  }
+
+  function onShowMore() {
+    state.visible += PAGE_SIZE;
+    renderTable();
   }
 
   function init() {
     cacheEls();
-    bindEvents();
-    load();
+    els.addForm.addEventListener('submit', onAddSubmit);
+    els.showMore.addEventListener('click', onShowMore);
+
+    loadViewer()
+      .then(function () {
+        if (state.sessionExpired) return;
+        return loadExpenses();
+      })
+      .catch(function () {
+        /* session expired handled above */
+      });
   }
 
   if (document.readyState === 'loading') {

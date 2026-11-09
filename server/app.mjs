@@ -1,132 +1,92 @@
 import express from 'express';
-import crypto from 'node:crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Startup self-check: EXPENSE_LIMIT must be configured by operations.
+// No default is set here.
+if (process.env.EXPENSE_LIMIT === undefined) {
+  throw new Error('Startup self-check failed: EXPENSE_LIMIT is not configured');
+}
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));
 
-const CATEGORIES = ['Password reset', 'Account lockout', 'Hardware', 'Software', 'Network', 'Access request'];
-const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
-const STATUSES = ['Open', 'In progress', 'Resolved'];
+// In-memory sample data (no managed database for this app).
+let nextId = 1;
+function makeExpense(date, category, amount, note) {
+  return { id: nextId++, date, category, amount, note };
+}
 
-const SUBJECTS = [
-  'Cannot reset password',
-  'Locked out of account',
-  'Monitor not turning on',
-  'Laptop keyboard not working',
-  'Printer not printing',
-  'Software update failed',
-  'Application crashes on launch',
-  'No internet connection',
-  'Slow network speed',
-  'Cannot access shared drive',
-  'Request admin access',
-  'Email not syncing',
-  'Wi-Fi keeps disconnecting',
-  'Mouse not responding',
-  'Screen flickering',
-  'Need new monitor',
-  'Request VPN access',
-  'Cannot log in to portal',
-  'Password expired',
-  'Two-factor code not arriving',
-  'USB drive not recognized',
-  'Webcam not working',
-  'Microphone not working',
-  'Request software license',
-  'Cannot install application',
-  'Request database access',
-  'Cannot access email',
-  'Request new laptop',
-  'Cannot connect to printer',
-  'Request cloud storage access',
-  'Cannot access intranet',
-  'Request new monitor',
-  'Cannot access shared folder',
-  'Request new keyboard',
-  'Cannot access VPN',
-  'Request new mouse',
-  'Cannot access network drive',
-  'Request new headset',
-  'Cannot access email server',
-  'Request new webcam'
+const expenses = [
+  makeExpense('2025-01-02', 'Software', 49.0, 'Figma team plan'),
+  makeExpense('2025-01-03', 'Travel', 120.5, 'Airport transfer'),
+  makeExpense('2025-01-05', 'Meals', 32.75, 'Client lunch'),
+  makeExpense('2025-01-07', 'Software', 120.0, 'Slack upgrade'),
+  makeExpense('2025-01-08', 'Office', 85.0, 'Standing desk mat'),
+  makeExpense('2025-01-09', 'Travel', 210.0, 'Flight to NYC'),
+  makeExpense('2025-01-10', 'Meals', 18.4, 'Team coffee'),
+  makeExpense('2025-01-11', 'Software', 29.99, 'Notion seats'),
+  makeExpense('2025-01-12', 'Office', 42.0, 'Whiteboard markers'),
+  makeExpense('2025-01-13', 'Travel', 95.0, 'Hotel night'),
+  makeExpense('2025-01-14', 'Meals', 54.2, 'Dinner after demo'),
+  makeExpense('2025-01-15', 'Software', 75.0, 'CI minutes overage'),
+  makeExpense('2025-01-16', 'Office', 130.0, 'Ergonomic chair'),
+  makeExpense('2025-01-17', 'Travel', 60.0, 'Rideshare'),
+  makeExpense('2025-01-18', 'Meals', 27.9, 'Lunch'),
+  makeExpense('2025-01-19', 'Software', 15.0, 'Domain renewal'),
+  makeExpense('2025-01-20', 'Office', 22.0, 'Cables and adapters'),
+  makeExpense('2025-01-21', 'Travel', 180.0, 'Train tickets'),
+  makeExpense('2025-01-22', 'Meals', 41.0, 'Team pizza'),
+  makeExpense('2025-01-23', 'Software', 99.0, 'Monitoring add-on'),
+  makeExpense('2025-01-24', 'Office', 65.0, 'Monitor arm'),
+  makeExpense('2025-01-25', 'Travel', 140.0, 'Hotel night'),
+  makeExpense('2025-01-26', 'Meals', 19.5, 'Breakfast'),
+  makeExpense('2025-01-27', 'Software', 34.0, 'Design tool add-on'),
+  makeExpense('2025-01-28', 'Office', 12.0, 'Notebooks'),
+  makeExpense('2025-01-29', 'Travel', 75.0, 'Parking'),
+  makeExpense('2025-01-30', 'Meals', 60.0, 'Offsite lunch'),
+  makeExpense('2025-01-31', 'Software', 200.0, 'Annual license'),
+  makeExpense('2025-01-31', 'Office', 48.0, 'Desk plant'),
+  makeExpense('2025-01-31', 'Travel', 33.0, 'Taxi home'),
 ];
 
-const REQUESTERS = [
-  'Alice Johnson', 'Bob Smith', 'Carol Williams', 'David Brown', 'Emma Davis',
-  'Frank Miller', 'Grace Wilson', 'Henry Moore', 'Ivy Taylor', 'Jack Anderson',
-  'Karen Thomas', 'Liam Jackson', 'Mia White', 'Noah Harris', 'Olivia Martin',
-  'Peter Thompson', 'Quinn Garcia', 'Rachel Martinez', 'Sam Rodriguez', 'Tina Lewis'
-];
-
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function () {
-    a |= 0;
-    a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function buildTickets() {
-  const rand = mulberry32(11091807);
-  const now = Date.now();
-  const tickets = [];
-  for (let i = 0; i < 40; i++) {
-    const id = 1000 + i;
-    const subject = SUBJECTS[i % SUBJECTS.length];
-    const requester = REQUESTERS[Math.floor(rand() * REQUESTERS.length)];
-    const category = CATEGORIES[Math.floor(rand() * CATEGORIES.length)];
-    const priority = PRIORITIES[Math.floor(rand() * PRIORITIES.length)];
-    const status = STATUSES[Math.floor(rand() * STATUSES.length)];
-    const created = new Date(now - Math.floor(rand() * 14 * 24 * 60 * 60 * 1000)).toISOString();
-    tickets.push({ id, subject, requester, category, priority, status, created });
-  }
-  return tickets;
-}
-
-const tickets = buildTickets();
-
-function getViewer(req) {
-  const raw = req.get('X-Knowi-App-User');
-  if (!raw) return null;
-  try {
-    const json = Buffer.from(raw, 'base64url').toString('utf8');
-    const parsed = JSON.parse(json);
-    return { name: parsed.name || null, email: parsed.email || null };
-  } catch {
-    return null;
-  }
-}
+// --- API routes (registered before static middleware) ---
 
 app.get('/api/me', (req, res) => {
-  res.json(getViewer(req));
-});
-
-app.get('/api/tickets', (req, res) => {
-  const categories = [...new Set(tickets.map(t => t.category))];
-  const statuses = [...new Set(tickets.map(t => t.status))];
-  const priorities = [...new Set(tickets.map(t => t.priority))];
-  res.json({ tickets, categories, statuses, priorities });
-});
-
-app.post('/api/tickets/:id/status', (req, res) => {
-  const id = Number(req.params.id);
-  const ticket = tickets.find(t => t.id === id);
-  if (!ticket) {
-    return res.status(404).json({ error: 'Ticket not found' });
+  const raw = req.get('X-Knowi-App-User');
+  if (!raw) {
+    return res.json({ name: null, email: null });
   }
-  const status = req.body && req.body.status;
-  if (!STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'Invalid status' });
+  try {
+    const decoded = Buffer.from(raw, 'base64url').toString('utf8');
+    const parsed = JSON.parse(decoded);
+    res.json({ name: parsed.name ?? null, email: parsed.email ?? null });
+  } catch {
+    res.json({ name: null, email: null });
   }
-  ticket.status = status;
-  res.json({ ticket });
 });
 
-const webRoot = new URL('../web', import.meta.url).pathname;
-const indexHtmlPath = new URL('../web/index.html', import.meta.url).pathname;
+app.get('/api/expenses', (req, res) => {
+  res.json({ expenses });
+});
+
+app.post('/api/expenses', (req, res) => {
+  const { date, category, amount, note } = req.body || {};
+  if (!date || !category || amount === undefined || amount === null) {
+    return res.status(400).json({ error: 'date, category and amount are required' });
+  }
+  const expense = makeExpense(date, category, Number(amount), note || '');
+  expenses.push(expense);
+  res.status(201).json({ expense });
+});
+
+// --- Static files + SPA fallback ---
+
+const webRoot = path.join(__dirname, '..', 'web');
+const indexHtmlPath = path.join(webRoot, 'index.html');
 
 app.use(express.static(webRoot));
 
@@ -135,10 +95,6 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'Not found' });
   res.sendFile(indexHtmlPath);
 });
-
-if (!process.env.TICKET_LIMIT) {
-  throw new Error('Startup self-check failed: TICKET_LIMIT is not configured');
-}
 
 const port = Number(process.env.PORT);
 app.listen(port, '0.0.0.0');
